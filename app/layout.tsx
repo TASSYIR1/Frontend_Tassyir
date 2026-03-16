@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import BackgroundShapes from "@/components/BackgroundShapes";
+import PageTransition3D from "@/components/PageTransition3D";
 
 export const metadata: Metadata = {
   title: "تسيير — أفضل طريقة لإدارة مدرستك",
@@ -19,6 +20,7 @@ export default function RootLayout({
         <div style={{ position: "relative", zIndex: 10 }}>
           {children}
         </div>
+        <PageTransition3D />
       </body>
     </html>
   );

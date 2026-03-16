@@ -1,12 +1,13 @@
+"use client";
+
 import Image from "next/image";
-import Link from "next/link";
 
 export default function CTA() {
   return (
     <section className="relative w-full bg-white overflow-hidden py-20 px-4 min-h-[260px] flex items-center justify-center">
 
       {/* Left purple shape */}
-      <div className="absolute top-10 -left-10 h-full w-[180px] md:w-[220px] pointer-events-none select-none z-0">
+      <div className="absolute top-10 h-full w-[180px] md:w-[220px] pointer-events-none select-none z-0" style={{ left: "-50px" }}>
         <Image
           src="assets/rectangle 8.png"
           alt=""
@@ -46,12 +47,12 @@ export default function CTA() {
         </p>
 
         {/* CTA Button */}
-        <Link
-          href="#"
-          className="mt-2 bg-[#D2008A] hover:bg-[#c01577] transition-colors duration-200 text-white font-bold text-base px-10 py-3 rounded-md shadow-md"
+        <button
+          onClick={() => window.location.href = "/signup"}
+          className="mt-2 bg-[#D2008A] hover:bg-[#c01577] transition-colors duration-200 text-white font-bold text-base px-10 py-3 rounded-md shadow-md cursor-pointer border-none"
         >
           سجل الان
-        </Link>
+        </button>
       </div>
 
     </section>

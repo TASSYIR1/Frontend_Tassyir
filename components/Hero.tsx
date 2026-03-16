@@ -20,7 +20,7 @@ export default function Hero() {
         style={{
           position: "absolute",
           top: -70,
-          right: 10,
+          right: -5,
           width: "70%",
           height: "100%",
           zIndex: 1,
@@ -118,6 +118,7 @@ export default function Hero() {
           </p>
 
           <button
+            onClick={() => window.location.href = "/signup"}
             style={{
               background: "#E91E8C",
               color: "#ffffff",
