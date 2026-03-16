@@ -9,6 +9,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         cairo: ['Cairo', 'sans-serif'],
+        sans: ['Cairo', 'sans-serif'],
       },
       colors: {
         'purple-main': '#9B5CF6',
