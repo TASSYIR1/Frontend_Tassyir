@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import SignupLayout from '../components/SignupLayout';
 
 type FieldName = 'schoolName' | 'email' | 'phone' | 'password' | 'confirmPassword' | 'address';
@@ -30,6 +31,7 @@ const SLIDE_STYLES = `
 `;
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [animDir, setAnimDir]         = useState<'forward' | 'backward'>('forward');
   const [animKey, setAnimKey]         = useState(0);   // bump to retrigger animation
@@ -89,8 +91,9 @@ export default function RegisterPage() {
     if (value.trim()) {
       setErrors((prev) => {
         if (!prev[field]) return prev;
-        const { [field]: _removed, ...rest } = prev;
-        return rest;
+        const nextErrors = { ...prev };
+        delete nextErrors[field];
+        return nextErrors;
       });
       setPopupErrors((prev) => prev.filter((m) => !m.includes(fieldLabels[field])));
     }
@@ -131,6 +134,7 @@ export default function RegisterPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Form submitted:', formData);
+    router.push('/signup/customize');
   };
 
   const steps = [
