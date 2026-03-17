@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect, ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 // --- Types ---
 type StudentPageKey =
@@ -75,9 +76,9 @@ function NavBtn({
 
 // --- Components ---
 
-function StatCard({ title, value, subtitle, highlight = false }: { title: string; value: string; subtitle: string, highlight?: boolean }) {
+function StatCard({ title, value, subtitle, highlight = false, onClick }: { title: string; value: string; subtitle: string, highlight?: boolean, onClick?: () => void }) {
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+    <div onClick={onClick} className={`bg-white rounded-2xl p-6 shadow-sm border border-gray-100 transition-shadow ${onClick ? 'hover:shadow-md cursor-pointer hover:border-[#e01c8a]/30' : 'hover:shadow-md'}`}>
       <h3 className="text-gray-500 font-bold text-sm mb-2">{title}</h3>
       <div className="flex items-baseline gap-2">
         <span className={`text-3xl font-black ${highlight ? 'text-green-600' : 'text-[#2d2d5e]'}`}>{value}</span>
@@ -104,8 +105,48 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 // --- Main Page ---
 
 export default function StudentDashboard() {
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState<StudentPageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [toastMessage, setToastMessage] = useState<{msg: string, type: 'success'|'info'|'error'} | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<any>(null);
+  const [expandedFile, setExpandedFile] = useState<string | null>(null);
+
+  const showToast = (msg: string, type: 'success'|'info'|'error' = 'success') => {
+    setToastMessage({ msg, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleLogout = () => {
+    showToast("جاري تسجيل الخروج...", "info");
+    setTimeout(() => {
+      router.push("/");
+    }, 1500);
+  };
+
+  const announcements = [
+    {
+      id: 1,
+      type: 'admin',
+      title: 'إغلاق استثنائي يوم الجمعة',
+      preview: 'سيتم إغلاق المؤسسة يوم الجمعة بعد الظهر...',
+      fullText: 'أعزاءنا الطلاب، يرجى العلم أنه سيتم إغلاق المؤسسة يوم الجمعة بعد الظهر لأسباب تتعلق بالصيانة التقنية. سيتم تأجيل الفصول المجدولة. نعتذر عن أي إزعاج قد ينجم عن ذلك.',
+      time: 'اليوم الساعة 09:30 ص',
+      color: 'blue'
+    },
+    {
+      id: 2,
+      type: 'teacher',
+      title: 'توفير موارد إضافية',
+      preview: 'تم إضافة تدريبات إضافية في قسم ملفاتي...',
+      fullText: 'لقد قمت بإضافة تدريبات إضافية في قسم ملفاتي وملفات الدروس. يرجى مراجعتها والتدرب عليها قبل المحاضرة القادمة. هناك 5 تدريبات جديدة مع حلول شاملة.',
+      time: 'أمس الساعة 18:00 م',
+      color: 'purple',
+      teacher: 'أ. أحمد (رياضيات)'
+    }
+  ];
 
   // Header Handlers
   const [showNotifs, setShowNotifs] = useState(false);
@@ -145,16 +186,16 @@ export default function StudentDashboard() {
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title="المحاضرات اليوم" value="4" subtitle="المحاضرة القادمة 10:15" />
-              <StatCard title="إعلانات" value="2" subtitle="إعلانات مدرسية جديدة" />
-              <StatCard title="الإشعارات" value={unreadCount.toString()} subtitle="إشعارات غير مقروءة" />
-              <StatCard title="حالة الدفع" value="نشط" subtitle="تم دفع شهر مارس" highlight={true} />
+              <StatCard title="المحاضرات اليوم" value="4" subtitle="المحاضرة القادمة 10:15" onClick={() => setCurrentPage("schedule")} />
+              <StatCard title="إعلانات" value="2" subtitle="إعلانات مدرسية جديدة" onClick={() => setCurrentPage("announcements")} />
+              <StatCard title="الإشعارات" value={unreadCount.toString()} subtitle="إشعارات غير مقروءة" onClick={() => setShowNotifs(true)} />
+              <StatCard title="حالة الدفع" value="نشط" subtitle="تم دفع شهر مارس" highlight={true} onClick={() => setCurrentPage("payments")} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <SectionCard title="جدول اليوم">
                 <div className="flex flex-col gap-3">
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
+                  <div onClick={() => setCurrentPage("schedule")} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors cursor-pointer">
                     <div>
                       <h4 className="font-black text-[#2d2d5e] text-sm">الرياضيات</h4>
                       <p className="text-xs text-gray-500 font-bold mt-1">أستاذ أحمد • قاعة 203</p>
@@ -163,7 +204,7 @@ export default function StudentDashboard() {
                       08:30 ص
                     </div>
                   </div>
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
+                  <div onClick={() => setCurrentPage("schedule")} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors cursor-pointer">
                     <div>
                       <h4 className="font-black text-[#2d2d5e] text-sm">الفيزياء</h4>
                       <p className="text-xs text-gray-500 font-bold mt-1">أستاذة سارة • قاعة 107</p>
@@ -177,14 +218,26 @@ export default function StudentDashboard() {
 
               <SectionCard title="أحدث الإعلانات">
                 <div className="flex flex-col gap-3">
-                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 hover:bg-rose-100/50 transition-colors">
+                  <div 
+                    onClick={() => {
+                      setSelectedAnnouncement(announcements[0]);
+                      setShowAnnouncementModal(true);
+                    }}
+                    className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 hover:bg-rose-100/50 transition-colors cursor-pointer hover:shadow-md"
+                  >
                     <div className="w-2 h-2 mt-1.5 bg-[#e01c8a] rounded-full shadow-[0_0_8px_rgba(224,28,138,0.5)]"></div>
                     <div>
                       <h4 className="font-black text-rose-900 text-sm">حدث مدرسي</h4>
                       <p className="text-xs text-rose-700 font-bold mt-1">الاحتفال السنوي يقام يوم الجمعة بعد الظهر.</p>
                     </div>
                   </div>
-                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-start gap-4 hover:bg-blue-100/50 transition-colors">
+                  <div 
+                    onClick={() => {
+                      setSelectedAnnouncement(announcements[1]);
+                      setShowAnnouncementModal(true);
+                    }}
+                    className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-start gap-4 hover:bg-blue-100/50 transition-colors cursor-pointer hover:shadow-md"
+                  >
                     <div className="w-2 h-2 mt-1.5 bg-blue-500 rounded-full"></div>
                     <div>
                       <h4 className="font-black text-blue-900 text-sm">الأساتذة</h4>
@@ -254,36 +307,75 @@ export default function StudentDashboard() {
         return (
           <SectionCard title="ملفاتي (الدروس، الواجبات، PDF)">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6">
-              <div className="border border-gray-200 bg-gray-50 hover:bg-white hover:border-[#e01c8a]/30 shadow-sm hover:shadow-md rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 group flex flex-col items-center">
+              <div 
+                onClick={() => setExpandedFile(expandedFile === 'pdf1' ? null : 'pdf1')}
+                className={`border transition-all duration-300 rounded-2xl p-6 text-center cursor-pointer group flex flex-col items-center ${
+                  expandedFile === 'pdf1' 
+                    ? 'border-[#e01c8a]/50 bg-white shadow-lg ring-2 ring-[#e01c8a]/10' 
+                    : 'border-gray-200 bg-gray-50 hover:bg-white hover:border-[#e01c8a]/30 shadow-sm hover:shadow-md'
+                }`}
+              >
                 <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center text-[#e01c8a] shadow-sm mb-4 group-hover:scale-110 transition-transform">
                   <span className="font-black text-xl">PDF</span>
                 </div>
                 <h4 className="font-black text-[#2d2d5e] text-sm mb-1">الفصل الأول - رياضيات</h4>
                 <p className="text-xs text-gray-400 font-bold">بواسطة الأستاذ أحمد</p>
-                <button className="mt-4 text-xs font-bold text-white bg-[#e01c8a] px-4 py-1.5 rounded-lg w-full hover:bg-rose-600 transition-colors">
-                  تحميل
+                {expandedFile === 'pdf1' && (
+                  <div className="mt-3 w-full pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-600 font-bold mb-3">حجم الملف: 2.5 MB • تاريخ الرفع: 10 مارس 2026</p>
+                  </div>
+                )}
+                <button onClick={(e) => {e.stopPropagation(); showToast("جاري تحميل الملف... 2.5 MB", "info");}} className="mt-4 text-xs font-bold text-white bg-[#e01c8a] px-4 py-1.5 rounded-lg w-full hover:bg-rose-600 transition-colors">
+                  {expandedFile === 'pdf1' ? 'تحميل الآن' : 'معاينة & تحميل'}
                 </button>
               </div>
 
-              <div className="border border-gray-200 bg-gray-50 hover:bg-white hover:border-blue-300 shadow-sm hover:shadow-md rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 group flex flex-col items-center">
+              <div 
+                onClick={() => setExpandedFile(expandedFile === 'doc1' ? null : 'doc1')}
+                className={`border transition-all duration-300 rounded-2xl p-6 text-center cursor-pointer group flex flex-col items-center ${
+                  expandedFile === 'doc1' 
+                    ? 'border-blue-500/50 bg-white shadow-lg ring-2 ring-blue-500/10' 
+                    : 'border-gray-200 bg-gray-50 hover:bg-white hover:border-blue-300 shadow-sm hover:shadow-md'
+                }`}
+              >
                 <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm mb-4 group-hover:scale-110 transition-transform">
                   <span className="font-black text-xl">DOC</span>
                 </div>
                 <h4 className="font-black text-[#2d2d5e] text-sm mb-1">واجب الفيزياء</h4>
                 <p className="text-xs text-gray-400 font-bold">للتسليم في 12 مارس</p>
-                <button className="mt-4 text-xs font-bold text-white bg-blue-600 px-4 py-1.5 rounded-lg w-full hover:bg-blue-700 transition-colors">
-                  تحميل
+                {expandedFile === 'doc1' && (
+                  <div className="mt-3 w-full pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-600 font-bold mb-3">حجم الملف: 1.2 MB • تاريخ الرفع: 08 مارس 2026</p>
+                    <div className="bg-amber-50 border border-amber-100 rounded-lg p-2 text-[10px] text-amber-700 font-bold mb-3">
+                      ⏰ موعد التسليم: 12 مارس 2026 الساعة 18:00
+                    </div>
+                  </div>
+                )}
+                <button onClick={(e) => {e.stopPropagation(); showToast("جاري تحميل الملف... 1.2 MB", "info");}} className="mt-4 text-xs font-bold text-white bg-blue-600 px-4 py-1.5 rounded-lg w-full hover:bg-blue-700 transition-colors">
+                  {expandedFile === 'doc1' ? 'تحميل الآن' : 'معاينة & تحميل'}
                 </button>
               </div>
 
-              <div className="border border-gray-200 bg-gray-50 hover:bg-white hover:border-purple-300 shadow-sm hover:shadow-md rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 group flex flex-col items-center">
+              <div 
+                onClick={() => setExpandedFile(expandedFile === 'zip1' ? null : 'zip1')}
+                className={`border transition-all duration-300 rounded-2xl p-6 text-center cursor-pointer group flex flex-col items-center ${
+                  expandedFile === 'zip1' 
+                    ? 'border-purple-500/50 bg-white shadow-lg ring-2 ring-purple-500/10' 
+                    : 'border-gray-200 bg-gray-50 hover:bg-white hover:border-purple-300 shadow-sm hover:shadow-md'
+                }`}
+              >
                 <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 shadow-sm mb-4 group-hover:scale-110 transition-transform">
                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </div>
                 <h4 className="font-black text-[#2d2d5e] text-sm mb-1">تصحيح تمرين 3</h4>
                 <p className="text-xs text-gray-400 font-bold">ملف مشترك</p>
-                <button className="mt-4 text-xs font-bold text-white bg-purple-600 px-4 py-1.5 rounded-lg w-full hover:bg-purple-700 transition-colors">
-                  تحميل
+                {expandedFile === 'zip1' && (
+                  <div className="mt-3 w-full pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-600 font-bold mb-3">حجم الملف: 3.8 MB • 15 ملف • تاريخ الرفع: 15 مارس 2026</p>
+                  </div>
+                )}
+                <button onClick={(e) => {e.stopPropagation(); showToast("جاري تحميل الملفات... 3.8 MB", "info");}} className="mt-4 text-xs font-bold text-white bg-purple-600 px-4 py-1.5 rounded-lg w-full hover:bg-purple-700 transition-colors">
+                  {expandedFile === 'zip1' ? 'تحميل الآن' : 'معاينة & تحميل'}
                 </button>
               </div>
             </div>
@@ -333,7 +425,7 @@ export default function StudentDashboard() {
                      <td className="py-4 px-4">
                        <span className="bg-red-100 text-red-700 font-bold px-3 py-1 rounded-lg text-xs">غائب</span>
                      </td>
-                     <td className="py-4 px-4 text-sm font-bold text-blue-500 underline cursor-pointer">تم تقديم عذر طبي</td>
+                     <td className="py-4 px-4 text-sm font-bold text-blue-500 underline cursor-pointer" onClick={() => showToast("عرض العذر الطبي المرفق...", "info")}>تم تقديم عذر طبي</td>
                    </tr>
                    <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                      <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">05 مارس 2026</td>
@@ -353,7 +445,7 @@ export default function StudentDashboard() {
         return (
           <SectionCard title="سجل المدفوعات">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="border border-gray-200 rounded-2xl p-5 hover:border-[#e01c8a]/30 transition-all shadow-sm bg-white">
+              <div onClick={() => setShowPaymentModal(true)} className="border border-gray-200 rounded-2xl p-5 hover:border-green-300 hover:shadow-md transition-all shadow-sm bg-white cursor-pointer">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h4 className="font-black text-[#2d2d5e] text-lg">شهر مارس</h4>
@@ -365,13 +457,13 @@ export default function StudentDashboard() {
                 </div>
                 <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
                   <span className="font-black text-lg text-[#2d2d5e]">1500 درهم</span>
-                  <button className="text-[#e01c8a] text-sm font-bold hover:underline flex items-center gap-1">
+                  <button onClick={(e) => {e.stopPropagation(); showToast("جاري تحميل الإيصال...", "success");}} className="text-[#e01c8a] text-sm font-bold hover:underline flex items-center gap-1">
                     تحميل الإيصال
                   </button>
                 </div>
               </div>
 
-              <div className="border border-[#e01c8a]/40 bg-rose-50/30 rounded-2xl p-5 hover:border-[#e01c8a] transition-all shadow-sm">
+              <div onClick={() => setShowPaymentModal(true)} className="border border-[#e01c8a]/40 bg-rose-50/30 rounded-2xl p-5 hover:border-[#e01c8a] transition-all shadow-sm hover:shadow-md cursor-pointer">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h4 className="font-black text-[#2d2d5e] text-lg">شهر أبريل</h4>
@@ -383,7 +475,7 @@ export default function StudentDashboard() {
                 </div>
                 <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
                   <span className="font-black text-lg text-[#2d2d5e]">1500 درهم</span>
-                  <button className="bg-[#e01c8a] hover:bg-rose-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
+                  <button onClick={(e) => {e.stopPropagation(); setShowPaymentModal(true); showToast("فتح نافذة الدفع الآمن...", "info");}} className="bg-[#e01c8a] hover:bg-rose-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors hover:shadow-md">
                     الدفع الآن
                   </button>
                 </div>
@@ -396,27 +488,30 @@ export default function StudentDashboard() {
         return (
           <SectionCard title="الإعلانات (المدرسة والمعلمين)">
             <div className="flex flex-col gap-4">
-              <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-[#e01c8a]/30 transition-all">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md">الإدارة</span>
-                  <span className="text-xs text-gray-400 font-bold">اليوم الساعة 09:30 ص</span>
+              {announcements.map((announcement) => (
+                <div 
+                  key={announcement.id}
+                  onClick={() => {
+                    setSelectedAnnouncement(announcement);
+                    setShowAnnouncementModal(true);
+                  }}
+                  className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-[#e01c8a]/30 transition-all cursor-pointer hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`bg-${announcement.color}-100 text-${announcement.color}-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md`}>
+                      {announcement.type === 'admin' ? 'الإدارة' : 'أستاذ أحمد (رياضيات)'}
+                    </span>
+                    <span className="text-xs text-gray-400 font-bold">{announcement.time}</span>
+                  </div>
+                  <h4 className="font-black text-[#2d2d5e] text-base mb-2 flex items-center gap-2">
+                    {announcement.title}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 group-hover:text-[#e01c8a]"><polyline points="9 18 15 12 9 6"/></svg>
+                  </h4>
+                  <p className="text-sm text-gray-600 font-medium leading-relaxed">
+                    {announcement.preview}
+                  </p>
                 </div>
-                <h4 className="font-black text-[#2d2d5e] text-base mb-2">إغلاق استثنائي يوم الجمعة</h4>
-                <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                  أعزاءنا الطلاب، يرجى العلم أنه سيتم إغلاق المؤسسة يوم الجمعة بعد الظهر لأسباب تتعلق بالصيانة التقنية. سيتم تأجيل الفصول المجدولة.
-                </p>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-[#e01c8a]/30 transition-all">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-purple-100 text-purple-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md">أستاذ أحمد (رياضيات)</span>
-                  <span className="text-xs text-gray-400 font-bold">أمس الساعة 18:00 م</span>
-                </div>
-                <h4 className="font-black text-[#2d2d5e] text-base mb-2">توفير موارد إضافية</h4>
-                <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                  لقد قمت بإضافة تدريبات إضافية في قسم ملفاتي. يرجى مراجعتها والتدرب عليها قبل المحاضرة القادمة.
-                </p>
-              </div>
+              ))}
             </div>
           </SectionCard>
         );
@@ -429,6 +524,26 @@ export default function StudentDashboard() {
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap'); * { font-family: 'Cairo', sans-serif; }`}</style>
+      
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-white px-6 py-3 rounded-2xl shadow-xl shadow-rose-200/50 border border-rose-100 flex items-center gap-3">
+            {toastMessage.type === 'info' && (
+              <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              </div>
+            )}
+            {toastMessage.type === 'success' && (
+              <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-500">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              </div>
+            )}
+            <span className="font-bold text-[#2d2d5e] text-sm">{toastMessage.msg}</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex h-screen bg-[#f4f4f8] overflow-hidden font-cairo" dir="rtl">
         {/* Mobile Overlay */}
         <div
@@ -485,7 +600,9 @@ export default function StudentDashboard() {
             </div>
 
             <div className="mt-8 pt-6 border-t border-white/10 px-4">
-              <button className="group flex items-center justify-between px-4 py-3.5 rounded-xl text-[15px] font-black w-full text-right transition-all duration-300 text-white/80 hover:bg-rose-500/80 hover:text-white hover:shadow-lg hover:shadow-rose-500/30 border border-transparent hover:border-rose-400 mt-2">
+              <button 
+                onClick={handleLogout}
+                className="group flex items-center justify-between px-4 py-3.5 rounded-xl text-[15px] font-black w-full text-right transition-all duration-300 text-white/80 hover:bg-rose-500/80 hover:text-white hover:shadow-lg hover:shadow-rose-500/30 border border-transparent hover:border-rose-400 mt-2">
                 <div className="flex items-center gap-3">
                   <span className="group-hover:translate-x-1 transition-transform duration-300">
                     {Icons.logout}
@@ -521,7 +638,7 @@ export default function StudentDashboard() {
                 </h1>
                 <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-400 mt-1 flex-row-reverse w-fit">
                   <span className="text-gray-300">/</span>
-                  <span className="text-[#e01c8a] hover:text-rose-600 transition-colors cursor-pointer">مساحة الطالب</span>
+                  <span className="text-[#e01c8a] hover:text-rose-600 transition-colors cursor-pointer" onClick={() => setCurrentPage("home")}>مساحة الطالب</span>
                   <span>{pageTitles[currentPage]}</span>
                 </div>
               </div>
@@ -639,7 +756,7 @@ export default function StudentDashboard() {
 
               <div className="hidden md:block w-px h-8 bg-gray-200 rounded-full mx-1"></div>
 
-              <button className="flex items-center gap-3 p-1 pl-3 rounded-full hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all duration-300 group">
+              <button onClick={() => showToast("فتح الملف الشخصي...", "info")} className="flex items-center gap-3 p-1 pl-3 rounded-full hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all duration-300 group">
                 <div className="w-10 h-10 bg-linear-to-br from-[#e01c8a] to-rose-400 rounded-full flex items-center justify-center shadow-md shadow-rose-200 group-hover:shadow-lg group-hover:-translate-y-0.5 transition-all duration-300 border-2 border-white ring-2 ring-transparent group-hover:ring-rose-100 shrink-0">
                   <span className="text-white font-black text-sm">ي</span>
                 </div>
@@ -654,6 +771,131 @@ export default function StudentDashboard() {
           <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#f4f4f8]">
             {content}
           </main>
+
+          {/* Announcement Modal */}
+          {showAnnouncementModal && selectedAnnouncement && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto animate-in scale-95 fade-in duration-300">
+                <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-5 flex items-center justify-between">
+                  <h2 className="font-black text-xl text-[#2d2d5e]">{selectedAnnouncement.title}</h2>
+                  <button 
+                    onClick={() => setShowAnnouncementModal(false)}
+                    className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
+                    <span className={`bg-${selectedAnnouncement.color}-100 text-${selectedAnnouncement.color}-700 text-[10px] font-black uppercase px-3 py-1 rounded-lg`}>
+                      {selectedAnnouncement.type === 'admin' ? 'الإدارة' : selectedAnnouncement.teacher}
+                    </span>
+                    <span className="text-sm text-gray-400 font-bold">{selectedAnnouncement.time}</span>
+                  </div>
+                  
+                  <div className="prose prose-sm max-w-none">
+                    <p className="text-gray-700 font-bold text-base leading-relaxed whitespace-pre-wrap">
+                      {selectedAnnouncement.fullText}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 flex gap-3 justify-end">
+                    <button 
+                      onClick={() => {
+                        setShowAnnouncementModal(false);
+                        showToast('تم وضع علامة على الإعلان...', 'success');
+                      }}
+                      className="px-6 py-2.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                    >
+                      وضع علامة
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setShowAnnouncementModal(false);
+                        showToast('تم إغلاق الإعلان', 'info');
+                      }}
+                      className="px-6 py-2.5 rounded-lg bg-[#e01c8a] text-white font-bold hover:bg-rose-600 transition-colors shadow-md"
+                    >
+                      حسناً، فهمت
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Modal */}
+          {showPaymentModal && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full animate-in scale-95 fade-in duration-300">
+                <div className="border-b border-gray-100 px-6 py-5 flex items-center justify-between">
+                  <h2 className="font-black text-xl text-[#2d2d5e]">بوابة الدفع الآمن</h2>
+                  <button 
+                    onClick={() => setShowPaymentModal(false)}
+                    className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <div className="p-6 space-y-4">
+                  <div className="bg-gradient-to-br from-rose-50 to-orange-50 border border-rose-100 rounded-2xl p-4">
+                    <p className="text-sm text-gray-600 font-bold mb-2">المبلغ المستحق:</p>
+                    <p className="text-3xl font-black text-[#e01c8a]">1500 درهم</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 cursor-pointer hover:border-blue-300 transition-colors">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 text-sm font-black">💳</div>
+                      <div className="flex-1 text-right">
+                        <p className="font-bold text-gray-700 text-sm">بطاقة ائتمان</p>
+                        <p className="text-xs text-gray-400">Visa, Mastercard</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 cursor-pointer hover:border-green-300 transition-colors">
+                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center text-green-600 text-sm font-black">📱</div>
+                      <div className="flex-1 text-right">
+                        <p className="font-bold text-gray-700 text-sm">المحفظة الرقمية</p>
+                        <p className="text-xs text-gray-400">Apple Pay, Google Pay</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 cursor-pointer hover:border-purple-300 transition-colors">
+                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 text-sm font-black">🏦</div>
+                      <div className="flex-1 text-right">
+                        <p className="font-bold text-gray-700 text-sm">تحويل بنكي</p>
+                        <p className="text-xs text-gray-400">حساب مدرسي</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-gray-100">
+                    <button 
+                      onClick={() => {
+                        setShowPaymentModal(false);
+                        showToast('تم إلغاء العملية', 'info');
+                      }}
+                      className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                    >
+                      إلغاء
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setShowPaymentModal(false);
+                        showToast('جاري معالجة الدفع... يرجى الانتظار', 'info');
+                        setTimeout(() => showToast('تم تأكيد الدفع بنجاح! شكراً لك', 'success'), 2000);
+                      }}
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-[#e01c8a] text-white font-bold hover:bg-rose-600 transition-colors shadow-md"
+                    >
+                      متابعة الدفع
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
