@@ -74,23 +74,24 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Human resources */}
+        {/* Human resources / Overview */}
         <div className="bg-white rounded-3xl shadow-[0_8px_30px_-4px_rgba(0,0,0,0.04)] border border-gray-100 p-6 flex flex-col justify-between hover:-translate-y-1 transition-transform duration-300">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-purple-500 font-bold">الموارد البشرية</p>
+            <p className="text-purple-500 font-bold">نظرة عامة والطلاب</p>
             <div className="p-2 bg-purple-500/10 rounded-xl">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-500"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </div>
           </div>
           <div className="flex flex-col gap-3">
             {[
-              { label: "التلاميذ", value: "324" },
-              { label: "الاساتذة", value: "28" },
-              { label: "الاداريون", value: "8" },
+              { label: "إجمالي الطلاب", value: "324" },
+              { label: "الأساتذة", value: "28" },
+              { label: "حصص اليوم", value: "15" },
+              { label: "طلاب غير مسددين", value: "42", alert: true },
             ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between bg-gray-50/50 p-2.5 rounded-2xl border border-gray-100">
-                <span className="text-[#2d2d5e] font-black text-base">{item.value}</span>
-                <span className="text-gray-500 text-xs font-bold">{item.label}</span>
+              <div key={item.label} className={`flex items-center justify-between p-2.5 rounded-2xl border ${item.alert ? 'bg-red-50/50 border-red-100' : 'bg-gray-50/50 border-gray-100'}`}>
+                <span className={`font-black text-base ${item.alert ? 'text-red-600' : 'text-[#2d2d5e]'}`}>{item.value}</span>
+                <span className={`text-xs font-bold ${item.alert ? 'text-red-500' : 'text-gray-500'}`}>{item.label}</span>
               </div>
             ))}
           </div>

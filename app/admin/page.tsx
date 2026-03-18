@@ -9,8 +9,8 @@ import UsersPage from "@/components/UsersPage";
 import ClassesPage from "@/components/Classespage";
 import SchedulePage from "@/components/Schedulepage";
 import AttendancePage from "@/components/Attendancepage";
-import FinancePage from "@/components/Financepage";
-import {
+import FinancePage from "@/components/Financepage";import AnnouncementsPage from "@/components/AnnouncementsPage";
+import SubjectsPage from "@/components/SubjectsPage";import {
   ContactPage,
   FilesPage,
   SettingsPage,
@@ -26,11 +26,14 @@ export default function DashboardPage() {
       case "home":       return <HomePage />;
       case "students":
       case "teachers":
-      case "admins":     return <UsersPage activeTab={currentPage} setPage={setCurrentPage} />;
+      case "parents":
+      case "admins":     return <UsersPage activeTab={currentPage as "students" | "teachers" | "parents" | "admins"} setPage={setCurrentPage} />;
       case "classes":    return <ClassesPage />;
+      case "subjects":   return <SubjectsPage />;
       case "schedule":   return <SchedulePage />;
       case "attendance": return <AttendancePage />;
       case "finance":    return <FinancePage />;
+      case "announcements": return <AnnouncementsPage />;
       case "contact":    return <ContactPage />;
       case "files":      return <FilesPage />;
       case "settings":   return <SettingsPage />;

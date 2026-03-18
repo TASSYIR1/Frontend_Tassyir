@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { PageKey } from "./types";
@@ -31,7 +31,16 @@ interface Admin {
   phone: string;
 }
 
-type AnyUser = Student | Teacher | Admin;
+interface Parent {
+  id: string;
+  name: string;
+  childrenCount: number;
+  dob: string;
+  status: "مدفوع" | "غير مدفوع";
+  phone: string;
+}
+
+type AnyUser = Student | Teacher | Admin | Parent;
 
 // ── Initial data ───────────────────────────────────────────────
 const initialStudents: Student[] = Array.from({ length: 14 }, (_, i) => ({
@@ -61,15 +70,25 @@ const initialAdmins: Admin[] = Array.from({ length: 8 }, (_, i) => ({
   phone: `05 5${i} 55 55 55`,
 }));
 
+const initialParents: Parent[] = Array.from({ length: 10 }, (_, i) => ({
+  id: `PAR${100 + i}`,
+  name: i % 2 === 0 ? "بن علي يوسف" : "حمداني كريم",
+  childrenCount: i % 3 + 1,
+  dob: `${String(3 + (i % 27)).padStart(2, "0")}/03/197${i % 9}`,
+  status: i % 4 === 3 ? "غير مدفوع" : "مدفوع",
+  phone: `07 7${i} 77 77 77`,
+}));
+
 // ── Props ──────────────────────────────────────────────────────
 interface UsersPageProps {
-  activeTab: "students" | "teachers" | "admins";
+  activeTab: "students" | "teachers" | "admins" | "parents";
   setPage: (p: PageKey) => void;
 }
 
-const tabs: { label: string; key: "students" | "teachers" | "admins" }[] = [
+const tabs: { label: string; key: "students" | "teachers" | "admins" | "parents" }[] = [
   { label: "الطلاب",    key: "students" },
   { label: "الاساتذة",  key: "teachers" },
+  { label: "الاولياء",  key: "parents" },
   { label: "الاداريون", key: "admins"   },
 ];
 
@@ -131,9 +150,9 @@ function ViewModal({ user, tab, onClose }: { user: AnyUser; tab: string; onClose
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
       <div dir="rtl" className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative">
-        <div className="absolute -top-16 -right-16 w-32 h-32 bg-gradient-to-br from-[#e01c8a]/20 to-transparent rounded-full -z-10"></div>
+        <div className="absolute -top-16 -right-16 w-32 h-32 bg-linear-to-br from-[#e01c8a]/20 to-transparent rounded-full -z-10"></div>
         {/* Header */}
-        <div className="bg-gradient-to-l from-[#e01c8a] to-[#c0157a] px-6 py-6 flex items-center justify-between shadow-sm relative overflow-hidden">
+        <div className="bg-linear-to-l from-[#e01c8a] to-[#c0157a] px-6 py-6 flex items-center justify-between shadow-sm relative overflow-hidden">
           <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-sm"></div>
           <div className="relative z-10">
             <p className="text-white font-black text-2xl mb-1">{user.name}</p>
@@ -295,6 +314,40 @@ function EditTeacherModal({ teacher, onSave, onClose }: {
   );
 }
 
+// ── Edit Parent Modal ──────────────────────────────────────────
+function EditParentModal({ parent, onSave, onClose }: {
+  parent: Parent; onSave: (p: Parent) => void; onClose: () => void;
+}) {
+  const [form, setForm] = useState({ ...parent });
+  const set = (k: keyof Parent) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div dir="rtl" className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+          <h2 className="text-[#2d2d5e] font-black text-lg flex items-center gap-2">
+            <span className="w-2 h-6 bg-[#5B8FF9] rounded-full"></span>
+            تعديل بيانات الولي
+          </h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white hover:bg-gray-200 border border-gray-100 shadow-sm flex items-center justify-center text-gray-500 transition-all">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div className="p-6 flex flex-col gap-4">
+          <Field label="الاسم واللقب" value={form.name}  onChange={set("name")} />
+          <Field label="عدد الأبناء"  value={form.childrenCount.toString()}  onChange={(v) => setForm((f)=>({...f, childrenCount: parseInt(v)||0}))} type="number" />
+          <Field label="تاريخ الميلاد" value={form.dob}  onChange={set("dob")} />
+          <Field label="رقم الهاتف"   value={form.phone} onChange={set("phone")} />
+        </div>
+        <div className="flex gap-3 px-6 pb-6 bg-gray-50/30 pt-4 border-t border-gray-50">
+          <button onClick={() => onSave(form)} className="flex-1 bg-[#5B8FF9] hover:bg-blue-600 hover:-translate-y-0.5 text-white font-bold text-sm py-3 rounded-xl transition-all shadow-[0_4px_15px_-3px_rgba(91,143,249,0.4)]">حفظ التغييرات</button>
+          <button onClick={onClose} className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 font-bold text-sm py-3 rounded-xl transition-all">إلغاء</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Edit Modal (admin) ─────────────────────────────────────────
 function EditAdminModal({ admin, onSave, onClose }: {
   admin: Admin; onSave: (a: Admin) => void; onClose: () => void;
@@ -331,7 +384,7 @@ function EditAdminModal({ admin, onSave, onClose }: {
 
 // ── Add Modal ──────────────────────────────────────────────────
 function AddModal({ tab, onAdd, onClose }: {
-  tab: "students" | "teachers" | "admins";
+  tab: "students" | "teachers" | "parents" | "admins";
   onAdd: (u: AnyUser) => void;
   onClose: () => void;
 }) {
@@ -340,14 +393,15 @@ function AddModal({ tab, onAdd, onClose }: {
   const [extra1, setExtra1]   = useState("");
   const [extra2, setExtra2]   = useState("");
 
-  const title    = tab === "students" ? "إضافة طالب جديد" : tab === "teachers" ? "إضافة أستاذ جديد" : "إضافة إداري جديد";
-  const label1   = tab === "students" ? "المستوى الدراسي" : tab === "teachers" ? "المواد" : "الدور";
+  const title    = tab === "students" ? "إضافة طالب جديد" : tab === "teachers" ? "إضافة أستاذ جديد" : tab === "parents" ? "إضافة ولي أمر جديد" : "إضافة إداري جديد";
+  const label1   = tab === "students" ? "المستوى الدراسي" : tab === "teachers" ? "المواد" : tab === "parents" ? "عدد الأبناء" : "الدور";
   const label2   = tab === "students" ? "ولي الأمر / هاتف" : "رقم الهاتف";
 
   const handleAdd = () => {
     if (!name.trim()) return;
     const base = { id: `${tab.slice(0, 3).toUpperCase()}${Date.now()}`, name, dob, status: "مدفوع" as const };
     if (tab === "students") onAdd({ ...base, level: extra1, parent: extra2 });
+    else if (tab === "parents") onAdd({ ...base, childrenCount: parseInt(extra1)||1, phone: extra2 });
     else if (tab === "teachers") onAdd({ ...base, subject: extra1, phone: extra2 });
     else onAdd({ ...base, role: extra1, phone: extra2 });
     onClose();
@@ -385,6 +439,7 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [teachers, setTeachers] = useState<Teacher[]>(initialTeachers);
   const [admins,   setAdmins]   = useState<Admin[]>(initialAdmins);
+  const [parents,  setParents]  = useState<Parent[]>(initialParents);
 
   const [showAdd,    setShowAdd]    = useState(false);
   const [viewUser,   setViewUser]   = useState<AnyUser | null>(null);
@@ -397,6 +452,7 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
     if (activeTab === "students") setStudents((s) => s.filter((x) => x.id !== deleteUser.id));
     if (activeTab === "teachers") setTeachers((t) => t.filter((x) => x.id !== deleteUser.id));
     if (activeTab === "admins")   setAdmins((a) => a.filter((x) => x.id !== deleteUser.id));
+      if (activeTab === "parents")  setParents((p) => p.filter((x) => x.id !== deleteUser.id));
     setDeleteUser(null);
   };
 
@@ -404,6 +460,7 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
     if (activeTab === "students") setStudents((s) => s.map((x) => x.id === updated.id ? updated as Student : x));
     if (activeTab === "teachers") setTeachers((t) => t.map((x) => x.id === updated.id ? updated as Teacher : x));
     if (activeTab === "admins")   setAdmins((a) => a.map((x) => x.id === updated.id ? updated as Admin : x));
+      if (activeTab === "parents")  setParents((p) => p.map((x) => x.id === updated.id ? updated as Parent : x));
     setEditUser(null);
   };
 
@@ -411,10 +468,11 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
     if (activeTab === "students") setStudents((s) => [u as Student, ...s]);
     if (activeTab === "teachers") setTeachers((t) => [u as Teacher, ...t]);
     if (activeTab === "admins")   setAdmins((a) => [u as Admin, ...a]);
+      if (activeTab === "parents")  setParents((p) => [u as Parent, ...p]);
   };
 
-  const addLabel   = activeTab === "students" ? "طالب جديد"  : activeTab === "teachers" ? "استاذ جديد" : "اداري جديد";
-  const listTitle  = activeTab === "students" ? "قائمة الطلاب داخل المؤسسة" : activeTab === "teachers" ? "قائمة الاساتذة داخل المؤسسة" : "قائمة الاداريين داخل المؤسسة";
+  const addLabel   = activeTab === "students" ? "طالب جديد"  : activeTab === "teachers" ? "استاذ جديد" : activeTab === "parents" ? "ولي أمر جديد" : "اداري جديد";
+  const listTitle  = activeTab === "students" ? "قائمة الطلاب داخل المؤسسة" : activeTab === "teachers" ? "قائمة الاساتذة داخل المؤسسة" : activeTab === "parents" ? "قائمة أولياء الأمور" : "قائمة الاداريين داخل المؤسسة";
 
   // ── Action buttons ──
   function Actions({ user }: { user: AnyUser }) {
@@ -448,7 +506,7 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
   return (
     <div dir="rtl" className="p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
       {/* Header */}
-      <div className="flex items-center justify-between bg-white p-6 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-gray-100 flex-shrink-0">
+      <div className="flex items-center justify-between bg-white p-6 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-gray-100 shrink-0">
         <div>
           <h1 className="text-2xl font-black text-[#2d2d5e] mb-1">إدارة المستخدمين</h1>
           <p className="text-sm font-semibold text-gray-500">إدارة تفاصيل الطلاب، الأساتذة، والإداريين</p>
@@ -494,7 +552,7 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
         <div className="overflow-x-auto">
           {/* ── Students table ── */}
           {activeTab === "students" && (
-            <table className="w-full text-sm border-collapse min-w-[900px]">
+            <table className="w-full text-sm border-collapse min-w-225">
               <thead className="bg-[#f8f9fc]/50 border-b border-gray-100">
                 <tr>
                   {["المعرف", "الاسم واللقب", "المستوى الدراسي", "تاريخ الميلاد", "حالة الدفع", "ولي الامر", "الاجراءات"].map((h) => (
@@ -524,7 +582,7 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
 
           {/* ── Teachers table ── */}
           {activeTab === "teachers" && (
-            <table className="w-full text-sm border-collapse min-w-[900px]">
+            <table className="w-full text-sm border-collapse min-w-225">
               <thead className="bg-[#f8f9fc]/50 border-b border-gray-100">
                 <tr>
                   {["المعرف", "الاسم واللقب", "المواد", "تاريخ الميلاد", "حالة الدفع", "رقم الهاتف", "الاجراءات"].map((h) => (
@@ -559,9 +617,39 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
             </table>
           )}
 
+          {/* ── Parents table ── */}
+          {activeTab === "parents" && (
+            <table className="w-full text-sm border-collapse min-w-225">
+              <thead className="bg-[#f8f9fc]/50 border-b border-gray-100">
+                <tr>
+                  {["المعرف", "الاسم واللقب", "تاريخ الميلاد", "حالة الدفع", "عدد الأبناء", "رقم الهاتف", "الاجراءات"].map((h) => (
+                    <th key={h} className="px-6 py-4 text-gray-400 font-black text-xs text-right whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {parents.map((p) => (
+                  <tr key={p.id} className="hover:bg-pink-50/30 transition-colors group">
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1.5 bg-gray-50 text-gray-500 rounded-lg text-xs font-bold border border-gray-100">{p.id}</span>
+                    </td>
+                    <td className="px-6 py-4 text-[#2d2d5e] font-black">{p.name}</td>
+                    <td className="px-6 py-4 text-gray-500 font-bold">{p.dob}</td>
+                    <td className="px-6 py-4"><StatusBadge status={p.status} /></td>
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-xl text-xs font-bold border border-amber-100">{p.childrenCount} ابناء</span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-500 font-bold" dir="ltr">{p.phone}</td>
+                    <td className="px-6 py-4"><Actions user={p} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
           {/* ── Admins table ── */}
           {activeTab === "admins" && (
-            <table className="w-full text-sm border-collapse min-w-[900px]">
+            <table className="w-full text-sm border-collapse min-w-225">
               <thead className="bg-[#f8f9fc]/50 border-b border-gray-100">
                 <tr>
                   {["المعرف", "الاسم واللقب", "الدور", "تاريخ الميلاد", "حالة الدفع", "رقم الهاتف", "الاجراءات"].map((h) => (
@@ -620,6 +708,16 @@ export default function UsersPage({ activeTab, setPage }: UsersPageProps) {
       {editUser && activeTab === "admins" && (
         <EditAdminModal admin={editUser as Admin} onSave={handleSaveEdit} onClose={() => setEditUser(null)} />
       )}
+      {editUser && activeTab === "parents" && (
+        <EditParentModal parent={editUser as Parent} onSave={handleSaveEdit} onClose={() => setEditUser(null)} />
+      )}
     </div>
   );
 }
+
+
+
+
+
+
+
