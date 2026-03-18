@@ -51,7 +51,7 @@ export default function Presence() {
             {statCards.map((card, i) => (
               <div
                 key={i}
-                className="absolute z-30 flex items-center gap-2 bg-[#F59BFF] backdrop-blur-sm border border-[#D2008A]/20 shadow-md rounded-xl px-3 py-2 min-w-[130px]"
+                className="absolute z-30 flex items-center gap-2 bg-white/40 backdrop-blur-xl border border-[#D2008A]/20 shadow-lg rounded-2xl px-8 py-4 min-w-[210px] min-h-[56px] max-w-[210px] max-h-[56px] transition-all duration-300 hover:scale-102 hover:border-[#D2008A]/40 hover:shadow-lg"
                 style={{ top: card.top, right: card.right, transform: "translateY(-50%)" }}
               >
                 <span className="text-lg">{card.icon}</span>
@@ -81,9 +81,9 @@ export default function Presence() {
 
           <Link
             href="#"
-            className="flex items-center gap-2 text-[#2d2d5e] font-semibold text-sm mt-1 group"
+            className="flex items-center gap-2 text-[#2d2d5e] font-semibold text-sm mt-1 group hover:scale-105 hover:text-[#D2008A] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#D2008A] focus:outline-none"
           >
-            <span className="w-2 h-5 bg-[#D2008A] rounded-sm inline-block" />
+            <span className="w-2 h-5 bg-[#D2008A] rounded-sm inline-block group-hover:scale-110 transition-transform duration-200" />
             <span className="group-hover:text-[#D2008A] transition-colors duration-200">
               اقرأ المزيد
             </span>

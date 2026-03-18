@@ -15,22 +15,24 @@ export default function Navbar() {
 
   return (
     <nav
+      className="sticky top-0 z-50 transition-all duration-300"
       style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        background: "transparent",
         height: 64,
         display: "flex",
         alignItems: "center",
         direction: "rtl",
-        zIndex: 50,
+        background: "linear-gradient(90deg, rgba(233,30,140,0.10) 0%, rgba(155,92,246,0.10) 100%)",
+        borderBottomLeftRadius: 32,
+        borderBottomRightRadius: 32,
+        boxShadow: "0 2px 24px 0 rgba(210,0,138,0.07)",
+        padding: "0 32px",
+        margin: "0 auto",
+        maxWidth: 1280,
       }}
     >
       <div
-        className="flex items-center justify-around w-full"
-        style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}
+        className="flex items-center justify-between w-full"
+        style={{ width: "100%" }}
       >
         {/* RIGHT ZONE — Logo */}
         <div className="flex items-center gap-2">
@@ -97,20 +99,8 @@ export default function Navbar() {
             <li key={link.label}>
               <a
                 href={link.href}
-                style={{
-                  color: "rgba(255,255,255,0.9)",
-                  fontWeight: 500,
-                  fontSize: 14,
-                  fontFamily: "'Cairo', sans-serif",
-                  textDecoration: "none",
-                  transition: "color 200ms",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.color = "#ffffff")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = "rgba(255,255,255,0.9)")
-                }
+                className="font-cairo font-semibold text-[15px] px-3 py-1 rounded-lg text-[#2d2d5e] hover:text-[#D2008A] hover:bg-[#f7eafd] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#D2008A] focus:outline-none shadow-none hover:shadow-md"
+                style={{ textDecoration: "none" }}
               >
                 {link.label}
               </a>
@@ -121,17 +111,8 @@ export default function Navbar() {
         {/* LEFT ZONE — CTA */}
         <div className="flex items-center gap-3">
           <button
-            style={{
-              background: "#E91E8C",
-              color: "#ffffff",
-              fontWeight: 700,
-              fontSize: 14,
-              fontFamily: "'Cairo', sans-serif",
-              padding: "8px 24px",
-              borderRadius: 4,
-              border: "none",
-              cursor: "pointer",
-            }}
+            className="bg-[#E91E8C] hover:bg-[#c01577] text-white font-bold text-[15px] px-6 py-2 rounded-lg shadow-md transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#D2008A] focus:outline-none hover:scale-105 active:scale-95"
+            style={{ fontFamily: "'Cairo', sans-serif" }}
           >
             تسجيل
           </button>

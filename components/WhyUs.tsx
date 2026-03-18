@@ -4,178 +4,92 @@ import Image from "next/image";
 import rectangle3 from "@/assets/Rectangle 3.png";
 
 export default function WhyUs() {
+  // New majestic cards data
   const cards = [
     {
       icon: (
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9B5CF6" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#D2008A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12l2 2 4-4" />
         </svg>
       ),
-      title: "حل موحد لإدارة المدارس",
-      text: "منصة واحدة تجمع بين الإدارة المالية, البيداغوجية, والتواصل الداخلي.",
+      title: "حلول ذكية متكاملة",
+      text: "كل ما تحتاجه لإدارة مدرستك في منصة واحدة، بذكاء وسهولة.",
+      gradient: "from-[#E91E8C]/80 via-[#BBA2ED]/60 to-[#9B5CF6]/80",
     },
     {
       icon: (
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9B5CF6" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2" />
-          <path d="M8 21h8" />
-          <path d="M12 17v4" />
-          <path d="M7 8h2v4H7z" />
-          <path d="M15 10h2v2h-2z" />
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9B5CF6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="4" />
+          <circle cx="12" cy="12" r="6" />
         </svg>
       ),
-      title: "يدعم نموذجين تشغيليين",
-      text: "مناسب للمدارس العادية ومدارس الدروس الخصوصية.",
+      title: "أمان وموثوقية عالية",
+      text: "حماية بياناتك بأحدث التقنيات وضمان استمرارية الخدمة.",
+      gradient: "from-[#9B5CF6]/80 via-[#E91E8C]/60 to-[#A577FD]/80",
     },
     {
       icon: (
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9B5CF6" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="4" width="20" height="16" rx="2" />
-          <path d="M12 4v16" />
-          <path d="M2 10h20" />
-          <circle cx="7" cy="7" r="1" fill="#9B5CF6" />
-          <circle cx="17" cy="7" r="1" fill="#9B5CF6" />
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#A577FD" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v20M2 12h20" />
         </svg>
       ),
-      title: "متابعة مالية دقيقة",
-      text: "تتبع حالة الدفعات (مدفوع / غير مدفوع), فواتير آلية, وإشعارات تذكر بالدفع.",
+      title: "دعم متواصل واحترافي",
+      text: "فريق دعم جاهز لمساعدتك في أي وقت، وبكل احترافية.",
+      gradient: "from-[#A577FD]/80 via-[#E91E8C]/60 to-[#BBA2ED]/80",
     },
     {
       icon: (
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9B5CF6" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-          <rect x="7" y="14" width="4" height="4" rx="0.5" />
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#BBA2ED" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="4" />
+          <path d="M8 12h8" />
         </svg>
       ),
-      title: "جدول الحصص",
-      text: "تحديثات فورية للإدارة والمعلمين, تعديل في الجدول.",
-    },
-    {
-      icon: (
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9B5CF6" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          <line x1="9" y1="10" x2="15" y2="10" />
-        </svg>
-      ),
-      title: "تواصل مع الأولياء",
-      text: "إشعارات فورية للأولياء حول نتائج وسلوك أبنائهم.",
+      title: "تجربة استخدام فريدة",
+      text: "واجهة عصرية وسهلة تجعل الإدارة متعة حقيقية.",
+      gradient: "from-[#BBA2ED]/80 via-[#E91E8C]/60 to-[#9B5CF6]/80",
     },
   ];
 
   return (
     <section className="relative w-full overflow-hidden pt-16 pb-20" dir="rtl" style={{ background: "#ffffff" }}>
-      {/* Section Header — above everything */}
-      <div className="text-center mb-6 relative z-10">
-        <span
-          className="block text-[12px] font-semibold font-cairo mb-1"
-          style={{ color: "#9B5CF6" }}
-        >
-          منصة تسيير عصرية
-        </span>
-        <h2
-          className="font-cairo font-black"
-          style={{
-            fontSize: "clamp(28px, 4vw, 40px)",
-            color: "#D2008A",
-          }}
-        >
-          لماذا نحن
-        </h2>
-      </div>
+      return (
+        <section className="relative w-full overflow-hidden pt-20 pb-24" dir="rtl" style={{ background: "linear-gradient(120deg, #f8f6ff 60%, #f3eafd 100%)" }}>
+          {/* Section Header */}
+          <div className="text-center mb-12 relative z-10">
+            <span className="block text-[13px] font-semibold font-cairo mb-2 tracking-widest text-[#A577FD]">مزايا تسيير</span>
+            <h2 className="font-cairo font-black text-4xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-l from-[#D2008A] via-[#9B5CF6] to-[#A577FD] mb-2 drop-shadow-lg">لماذا نحن؟</h2>
+            <p className="text-[#6B21A8] text-base md:text-lg font-semibold max-w-2xl mx-auto mt-2">اكتشف كيف تجعل منصتنا إدارة مدرستك تجربة فريدة، ذكية، وآمنة.</p>
+          </div>
 
-      {/* Row: Pink scroll section + Rectangle 3 on same line */}
-      <div className="relative" style={{ minHeight: 320 }}>
-        {/* Rectangle 3 — decorative purple shape, far right */}
-        <div
-          className="pointer-events-none absolute"
-          style={{
-            top: -80,
-            right: -20,
-            width: "40%",
-            height: "150%",
-            zIndex: 1,
-          }}
-        >
-          <Image
-            src={rectangle3}
-            alt=""
-            fill
-            style={{ objectFit: "contain", objectPosition: "top right" }}
-          />
-        </div>
-
-        {/* Pink scroll band — leaves space on right for Rectangle 3 */}
-        <div
-          className="relative z-10 py-10"
-          style={{
-            background: "#E91E8C",
-            marginRight: "5%",
-            borderRadius: "16px 0 0 16px",
-          }}
-        >
-          <div
-            className="flex gap-5 px-6 overflow-x-auto"
-            style={{
-              scrollSnapType: "x mandatory",
-              WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-            }}
-          >
+          {/* Majestic Card Grid */}
+          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-8 px-4 md:px-10 max-w-7xl mx-auto">
             {cards.map((card, i) => (
               <div
                 key={i}
-                className="flex-shrink-0 rounded-xl p-6"
-                style={{
-                  background: "white",
-                  width: 260,
-                  minHeight: 200,
-                  scrollSnapAlign: "start",
-                  direction: "rtl",
-                  textAlign: "right",
-                }}
+                className={`relative rounded-3xl p-8 flex flex-col items-center text-center shadow-xl bg-white/60 backdrop-blur-md border border-[#E9D7F7]/60 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:bg-white/90 hover:border-[#D2008A]/40 group`}
+                style={{ minHeight: 290, overflow: 'hidden' }}
               >
-                {/* Icon */}
-                <div
-                  className="flex items-center justify-center mb-4"
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 12,
-                    background: "rgba(155,92,246,0.08)",
-                  }}
-                >
+                {/* Glowing Gradient Border */}
+                <div className={`absolute -inset-1 rounded-3xl pointer-events-none z-0 opacity-0 group-hover:opacity-100 transition-all duration-300`} style={{ background: `linear-gradient(120deg, var(--tw-gradient-stops))` }} />
+
+                {/* Floating Icon */}
+                <div className={`relative z-10 flex items-center justify-center mb-5 w-20 h-20 rounded-full bg-gradient-to-br ${card.gradient} shadow-lg group-hover:scale-110 transition-transform duration-300`} style={{ boxShadow: '0 6px 32px 0 #D2008A22' }}>
                   {card.icon}
                 </div>
 
                 {/* Title */}
-                <h3
-                  className="font-cairo font-bold mb-2"
-                  style={{ fontSize: 15, color: "#1E0D3B" }}
-                >
-                  {card.title}
-                </h3>
+                <h3 className="font-cairo font-extrabold text-xl md:text-2xl text-[#241646] mb-3 drop-shadow-sm">{card.title}</h3>
 
                 {/* Text */}
-                <p
-                  className="font-cairo"
-                  style={{
-                    fontSize: 13,
-                    color: "#555",
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {card.text}
-                </p>
+                <p className="font-cairo text-[15px] text-[#555] font-medium leading-relaxed z-10">{card.text}</p>
+
+                {/* Animated Glow */}
+                <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 w-40 h-16 rounded-full blur-2xl opacity-40 z-0`} style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #BBA2ED 100%)' }} />
               </div>
             ))}
           </div>
-        </div>
-      </div>
+        </section>
 
       {/* Hide scrollbar via CSS */}
       <style jsx>{`

@@ -49,7 +49,8 @@ export default function CTA() {
         {/* CTA Button */}
         <button
           onClick={() => window.location.href = "/signup"}
-          className="mt-2 bg-[#D2008A] hover:bg-[#c01577] transition-colors duration-200 text-white font-bold text-base px-10 py-3 rounded-md shadow-md cursor-pointer border-none"
+          className="mt-2 bg-[#D2008A] hover:bg-[#c01577] transition-all duration-200 text-white font-bold text-base px-10 py-3 rounded-md shadow-lg cursor-pointer border-none focus-visible:ring-2 focus-visible:ring-[#D2008A] focus:outline-none hover:scale-105 active:scale-95"
+          style={{ boxShadow: '0 6px 24px rgba(210,0,138,0.18)' }}
         >
           سجل الان
         </button>

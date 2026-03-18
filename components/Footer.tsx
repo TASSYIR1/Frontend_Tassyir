@@ -22,11 +22,11 @@ export default function Footer() {
 
       {/* ── Main footer content ── */}
       <div className="w-full px-10 md:px-16 lg:px-24 py-12">
-        <div className="flex flex-col md:flex-row-reverse items-start justify-between gap-12 md:gap-0">
+        <div className="flex flex-col md:flex-row items-start justify-between gap-12 md:gap-0 text-left">
 
-          {/* ── Column 1 (far right): Logo + description ── */}
-          <div className="flex flex-col items-end gap-4 w-full md:w-1/3 md:pl-8">
-            <div className="flex items-end gap-3">
+          {/* ── Column 1 (right): Logo + description */}
+          <div className="flex flex-col items-start gap-4 w-full md:w-1/3 md:order-1 md:pl-8 text-left">
+            <div className="flex items-end gap-3 justify-start w-full">
               <Image
                 src="assets/logo.png"
                 alt="تسيير"
@@ -47,18 +47,18 @@ export default function Footer() {
             </p>
           </div>
 
-          {/* ── Column 2: Site map ── */}
-          <div className="flex flex-col items-center gap-4 w-full md:w-1/3">
+          {/* ── Column 2 (center): Site map */}
+          <div className="flex flex-col items-start gap-4 w-full md:w-1/3 md:order-2 text-left mr-16 md:mr-32 ml-0">
             <h3 className="text-white font-bold text-lg tracking-wide">
               خريطة الموقع
             </h3>
-            <ul className="flex flex-col items-center gap-3">
+            <ul className="flex flex-col items-start gap-3 w-full">
               {navLinks.map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className={`text-white/90 hover:text-white transition-colors duration-200 text-sm font-medium ${
-                      link.label === "الانتشار" ? "font-bold text-white" : ""
+                    className={`text-white/90 hover:text-white transition-colors duration-200 text-sm font-extrabold relative after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-[2px] after:bg-white after:scale-x-0 hover:after:scale-x-100 after:origin-right after:transition-transform after:duration-200 after:ease-in-out ${
+                      link.label === "الانتشار" ? "font-extrabold text-white" : ""
                     }`}
                   >
                     {link.label}
@@ -68,8 +68,8 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* ── Column 3 (far left): Contact ── */}
-          <div className="flex flex-col items-start gap-5 w-full md:w-1/3 md:pr-8">
+          {/* ── Column 3 (left): Contact */}
+          <div className="flex flex-col items-start gap-5 w-full md:w-1/3 md:order-3 md:pr-8 text-left">
             <h3 className="text-white font-bold text-lg tracking-wide w-full text-right">
               للتواصل
             </h3>
@@ -78,7 +78,7 @@ export default function Footer() {
             <div className="flex flex-row-reverse items-center gap-3 w-full justify-end">
               {socialIcons.map((icon) => (
                 <Link href="#" key={icon.alt}>
-                  <div className="w-9 h-9 rounded-md bg-transparent flex items-center gap-0 justify-center">
+                  <div className="w-9 h-9 rounded-md bg-transparent flex items-center gap-0 justify-center transition-transform duration-200 hover:scale-110 hover:shadow-lg">
                     <Image
                       src={icon.src}
                       alt={icon.alt}
@@ -98,9 +98,9 @@ export default function Footer() {
                 alt="phone"
                 width={18}
                 height={18}
-                className="object-contain color-white invert"
+                className="object-contain filter brightness-0 invert"
               />
-              <span className="text-white text-sm font-medium tracking-wide" dir="ltr">
+              <span className="text-white text-sm font-extrabold tracking-wide" dir="ltr">
                 06 66 66 66 66
               </span>
             </div>
@@ -112,15 +112,21 @@ export default function Footer() {
                 alt="mail"
                 width={18}
                 height={18}
-                className="object-contain color-white invert"
+                className="object-contain filter brightness-0 invert"
               />
-              <span className="text-white text-sm font-medium" dir="ltr">
+              <a
+                href="https://mail.google.com/mail/?view=cm&fs=1&to=tasyir@gmail.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white text-sm font-extrabold underline hover:text-[#FFD6F6] transition-colors duration-200"
+                dir="ltr"
+              >
                 tasyir@gmail.com
-              </span>
+              </a>
             </div>
 
             {/* CTA Button */}
-            <div className="w-full flex justify-">
+            <div className="w-full flex justify-start">
               <Link
                 href="#"
                 className="mt-1 bg-white text-[#D2008A] hover:bg-white/90 transition-colors duration-200 font-bold text-sm px-8 py-2.5 rounded-md shadow-md"
