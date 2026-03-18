@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect, ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 // --- Types ---
 type TeacherPageKey =
@@ -75,9 +76,22 @@ function NavBtn({
 
 // --- Components ---
 
-function StatCard({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
+function StatCard({ 
+  title, 
+  value, 
+  subtitle,
+  onClick 
+}: { 
+  title: string; 
+  value: string; 
+  subtitle: string;
+  onClick?: () => void;
+}) {
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+    <div 
+      onClick={onClick}
+      className={`bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow ${onClick ? 'cursor-pointer hover:border-rose-200' : ''}`}
+    >
       <h3 className="text-gray-500 font-bold text-sm mb-2">{title}</h3>
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-black text-[#2d2d5e]">{value}</span>
@@ -104,8 +118,22 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 // --- Main Page ---
 
 export default function TeacherDashboard() {
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState<TeacherPageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [toastMessage, setToastMessage] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
+
+  const showToast = (message: string, type: 'success'|'error'|'info' = 'success') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleLogout = () => {
+    showToast("جاري تسجيل الخروج...", "info");
+    setTimeout(() => {
+      router.push("/");
+    }, 1500);
+  };
 
   // Header Handlers
   const [showNotifs, setShowNotifs] = useState(false);
@@ -145,10 +173,10 @@ export default function TeacherDashboard() {
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title="حصص اليوم" value="4" subtitle="٢ صباحي، ٢ مسائي" />
-              <StatCard title="الحصص القادمة" value="3" subtitle="خلال ٢٤ ساعة القادمة" />
-              <StatCard title="الإعلانات الأسبوعية" value="5" subtitle="٢ جديد هذا الأسبوع" />
-              <StatCard title="الإشعارات الحديثة" value="7" subtitle={`${unreadCount} غير مقروءة`} />
+              <StatCard title="حصص اليوم" value="4" subtitle="٢ صباحي، ٢ مسائي" onClick={() => setCurrentPage('schedule')} />
+              <StatCard title="الحصص القادمة" value="3" subtitle="خلال ٢٤ ساعة القادمة" onClick={() => setCurrentPage('schedule')} />
+              <StatCard title="الإعلانات الأسبوعية" value="5" subtitle="٢ جديد هذا الأسبوع" onClick={() => setCurrentPage('announcements')} />
+              <StatCard title="الإشعارات الحديثة" value="7" subtitle={`${unreadCount} غير مقروءة`} onClick={() => setShowNotifs(true)} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -319,7 +347,7 @@ export default function TeacherDashboard() {
               </table>
             </div>
             <div className="mt-6 flex justify-end">
-              <button className="bg-[#e01c8a] hover:bg-rose-600 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow-md shadow-rose-200 transition-colors">
+              <button onClick={() => showToast("تم حفظ التعديلات...", "success")} className="bg-[#e01c8a] hover:bg-rose-600 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow-md shadow-rose-200 transition-colors">
                 حفظ التعديلات
               </button>
             </div>
@@ -361,7 +389,7 @@ export default function TeacherDashboard() {
                  <option>الفصل 5A</option>
                  <option>الفصل 4B</option>
                </select>
-               <button className="bg-[#2d2d5e] hover:bg-gray-800 text-white px-6 py-2.5 rounded-xl font-black text-sm transition-colors w-full sm:w-auto">
+               <button onClick={() => showToast("جاري تأكيد الرفع...", "info")} className="bg-[#2d2d5e] hover:bg-gray-800 text-white px-6 py-2.5 rounded-xl font-black text-sm transition-colors w-full sm:w-auto">
                  تأكيد الرفع
                </button>
             </div>
@@ -395,7 +423,7 @@ export default function TeacherDashboard() {
               </div>
 
               <div className="flex justify-end">
-                <button className="bg-[#e01c8a] hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-black text-sm shadow-md shadow-rose-200 transition-colors">
+                <button onClick={() => showToast("تم نشر الإعلان بنجاح...", "success")} className="bg-[#e01c8a] hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-black text-sm shadow-md shadow-rose-200 transition-colors">
                   نشر الإعلان
                 </button>
               </div>
@@ -405,13 +433,18 @@ export default function TeacherDashboard() {
 
       case "messaging":
         return (
-          <SectionCard title="رسائل الإدارة">
+          <SectionCard title="المراسلة الداخلية (الإدارة والسكرتارية)">
+            <div className="flex bg-gray-100 p-1 rounded-xl mb-4 w-fit">
+               <button onClick={() => showToast("تبديل إلى المراسلة مع السكرتارية...", "info")} className="px-6 py-2 text-sm font-bold bg-white text-[#e01c8a] rounded-lg shadow-sm">تواصل مع السكرتارية</button>
+               <button onClick={() => showToast("تبديل إلى المراسلة مع الإدارة...", "info")} className="px-6 py-2 text-sm font-bold text-gray-500 hover:text-gray-700">تواصل مع الإدارة</button>
+            </div>
+            
             <div className="flex flex-col gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 h-[400px] overflow-y-auto mb-4">
               <div className="flex justify-start">
                 <div className="bg-white border border-gray-200 rounded-2xl rounded-tr-sm p-4 max-w-[80%] shadow-sm">
-                  <h4 className="font-black text-xs text-blue-600 mb-1">الإدارة</h4>
+                  <h4 className="font-black text-xs text-blue-600 mb-1">السكرتارية</h4>
                   <p className="text-sm font-bold text-gray-700 leading-relaxed">
-                    نرجو تأكيد توفركم للمشاركة في الاجتماع التربوي يوم الخميس القادم.
+                    أستاذي، هل يمكنك تأكيد القاعة التي ستشغلها لدرس الدعم يوم الأحد؟
                   </p>
                   <span className="block text-left mt-2 text-[10px] text-gray-400 font-bold">10:00 ص</span>
                 </div>
@@ -421,7 +454,7 @@ export default function TeacherDashboard() {
                 <div className="bg-rose-50 border border-rose-100 rounded-2xl rounded-tl-sm p-4 max-w-[80%] shadow-sm">
                   <h4 className="font-black text-xs text-[#e01c8a] mb-1">أنت</h4>
                   <p className="text-sm font-bold text-rose-900 leading-relaxed">
-                    تم التأكيد، سأكون متواجداً بإذن الله.
+                    نعم، تم حجز القاعة 107 كما هو متفق عليه.
                   </p>
                   <span className="block text-left mt-2 text-[10px] text-rose-300 font-bold">10:15 ص</span>
                 </div>
@@ -431,10 +464,10 @@ export default function TeacherDashboard() {
             <div className="flex gap-2">
               <input 
                 type="text" 
-                placeholder="اكتب رسالتك للإدارة..."
+                placeholder="اكتب رسالتك..."
                 className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#e01c8a]/20 font-bold text-sm text-gray-700"
               />
-              <button className="bg-[#e01c8a] hover:bg-rose-600 text-white w-12 rounded-xl flex justify-center items-center shadow-md shadow-rose-200 transition-colors">
+              <button onClick={() => showToast("جاري إرسال الرسالة...", "success")} className="bg-[#e01c8a] hover:bg-rose-600 text-white w-12 rounded-xl flex justify-center items-center shadow-md shadow-rose-200 transition-colors">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-180 -ml-1"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
               </button>
             </div>
@@ -448,6 +481,19 @@ export default function TeacherDashboard() {
 
   return (
     <>
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+          <div className={`px-6 py-3 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 ${
+            toastMessage.type === 'success' ? 'bg-green-500 text-white' : 
+            toastMessage.type === 'error' ? 'bg-red-500 text-white' : 
+            'bg-blue-500 text-white'
+          }`}>
+            <span>{toastMessage.message}</span>
+          </div>
+        </div>
+      )}
+
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap'); * { font-family: 'Cairo', sans-serif; }`}</style>
       
       <div className="flex h-screen bg-[#f4f4f8] overflow-hidden" dir="rtl">
@@ -506,7 +552,10 @@ export default function TeacherDashboard() {
             </div>
 
             <div className="mt-8 pt-6 border-t border-white/10 px-4">
-              <button className="group flex items-center justify-between px-4 py-3.5 rounded-xl text-[15px] font-black w-full text-right transition-all duration-300 text-white/80 hover:bg-rose-500/80 hover:text-white hover:shadow-lg hover:shadow-rose-500/30 border border-transparent hover:border-rose-400 mt-2">
+            <button 
+              onClick={handleLogout}
+              className="group flex items-center justify-between px-4 py-3.5 rounded-xl text-[15px] font-black w-full text-right transition-all duration-300 text-white/80 hover:bg-rose-500/80 hover:text-white hover:shadow-lg hover:shadow-rose-500/30 border border-transparent hover:border-rose-400 mt-2"
+            >
                 <div className="flex items-center gap-3">
                   <span className="group-hover:-translate-x-1 transition-transform duration-300">
                     {Icons.logout}

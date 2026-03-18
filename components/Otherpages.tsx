@@ -22,7 +22,8 @@ const Icons = {
 // ─── CONTACT PAGE ──────────────────────────────────────────────
 const messages = Array.from({ length: 8 }, (_, i) => ({
   id: i + 1,
-  from: i % 2 === 0 ? "ولي الأمر - بن سالم" : "الاستاذ حمداني",
+  from: i % 2 === 0 ? "ولي الأمر - بن سالم" : "أستاذ - حمداني",
+  role: i % 2 === 0 ? "parent" : "prof",
   subject: i % 3 === 0 ? "استفسار عن الغياب" : i % 3 === 1 ? "طلب اجتماع" : "تقرير الدرجات",
   date: `${String(10 + i).padStart(2, "0")}/03/2026`,
   read: i % 3 !== 0,
@@ -42,7 +43,7 @@ export function ContactPage() {
               <div className="p-2 bg-[#e01c8a]/10 rounded-xl text-[#e01c8a] shadow-inner">
                 {Icons.Mail}
               </div>
-              <p className="text-[#2d2d5e] font-black text-lg">الرسائل</p>
+              <p className="text-[#2d2d5e] font-black text-lg">رسائل الأساتذة والآباء</p>
             </div>
             <button
               onClick={() => setShowCompose(true)}
@@ -59,8 +60,13 @@ export function ContactPage() {
                 className={`w-full text-right px-6 py-4 border-b border-gray-50 transition-all duration-300 relative group flex flex-col gap-2 ${selected === msg.id ? "bg-gradient-to-l from-pink-50/80 to-transparent" : "hover:bg-gray-50"}`}
               >
                 {selected === msg.id && <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-[#e01c8a] rounded-l-full shadow-[0_0_8px_rgba(224,28,138,0.5)]" />}
-                <div className="flex items-center justify-between w-full">
-                  <span className={`text-sm font-black transition-colors ${selected === msg.id ? "text-[#e01c8a]" : (msg.read ? "text-gray-500" : "text-[#2d2d5e]")}`}>{msg.from}</span>
+                <div className="flex items-center justify-between w-full mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${msg.role === 'parent' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                      {msg.role === 'parent' ? 'ولي أمر' : 'أستاذ'}
+                    </span>
+                    <span className={`text-sm font-black transition-colors ${selected === msg.id ? "text-[#e01c8a]" : (msg.read ? "text-gray-500" : "text-[#2d2d5e]")}`}>{msg.from}</span>
+                  </div>
                   <span className="text-[11px] font-bold text-gray-400 bg-white shadow-sm border border-gray-100 px-2 py-1 rounded-md">{msg.date}</span>
                 </div>
                 <div className="flex items-center justify-between w-full">
