@@ -10,39 +10,41 @@ import { useCustomizeTexts } from '../_shared/useCustomizeTexts';
 type PanelKey = 'home' | 'about' | 'gallery';
 
 const tools = [
-  { id: 'colors', label: 'ألوان', icon: '🎨', href: '/signup/customize' },
-  { id: 'images', label: 'الصور', icon: '🖼️', href: '/signup/customize/pictures' },
-  { id: 'sections', label: 'التقسيمات', icon: '▦', href: '/signup/customize/sections' },
-  { id: 'text', label: 'النصوص', icon: '≡', href: '/signup/customize/texts' },
-  { id: 'social', label: 'مواقع التواصل', icon: '⤴', href: '/signup/customize/social' },
+  { id: 'colors', label: 'ألوان', iconSrc: '/side%20bar%20stickers/mdi_color.png', href: '/signup/customize' },
+  { id: 'images', label: 'الصور', iconSrc: '/side%20bar%20stickers/icon-park-outline_picture.png', href: '/signup/customize/pictures' },
+  { id: 'sections', label: 'التقسيمات', iconSrc: '/side%20bar%20stickers/tabler_section.png', href: '/signup/customize/sections' },
+  { id: 'text', label: 'النصوص', iconSrc: '/side%20bar%20stickers/majesticons_text.png', href: '/signup/customize/texts' },
+  { id: 'social', label: 'مواقع التواصل', iconSrc: '/side%20bar%20stickers/material-symbols_share-outline.png', href: '/signup/customize/social' },
 ];
 
-function AccordionRow({
+function AccordionCard({
   label,
   open,
   onToggle,
+  children,
 }: {
   label: string;
   open: boolean;
   onToggle: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="flex w-full items-center justify-between rounded-lg border-2 border-[#1E163C] bg-white px-4 py-3"
-    >
-      <span className="text-sm font-extrabold text-[#241646]">{label}</span>
-      <span className="text-[#1E163C]" aria-hidden="true">
-        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          {open ? (
-            <path d="M5.25 12.5 10 7.75l4.75 4.75-1.5 1.5L10 10.75 6.75 14z" />
-          ) : (
-            <path d="M6.75 6 10 9.25 13.25 6l1.5 1.5L10 12.25 5.25 7.5z" />
-          )}
-        </svg>
-      </span>
-    </button>
+    <div className="rounded-2xl border-2 border-[#1E163C] bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-4 py-3"
+      >
+        <span className="text-sm font-extrabold text-[#241646]">{label}</span>
+        <span className="text-[#1E163C]" aria-hidden="true">
+          <svg className={`h-5 w-5 transition-transform duration-200 ${open ? 'rotate-180' : 'rotate-0'}`} viewBox="0 0 20 20" fill="currentColor">
+            <path d="M5.25 7.5 10 12.25 14.75 7.5 13.25 6 10 9.25 6.75 6z" />
+          </svg>
+        </span>
+      </button>
+
+      {open && <div className="border-t-2 border-[#1E163C] p-4">{children}</div>}
+    </div>
   );
 }
 
@@ -57,7 +59,11 @@ export default function TextsCustomizePage() {
     return items;
   }, [sections.about, sections.gallery]);
 
-  const [openPanel, setOpenPanel] = useState<PanelKey>(availablePanels.includes('about') ? 'about' : 'home');
+  const [openPanel, setOpenPanel] = useState<PanelKey | null>(availablePanels.includes('about') ? 'about' : 'home');
+
+  const togglePanel = (panel: PanelKey) => {
+    setOpenPanel((current) => (current === panel ? null : panel));
+  };
 
   return (
     <main className="min-h-screen bg-[#E7E8ED]" dir="rtl">
@@ -65,7 +71,10 @@ export default function TextsCustomizePage() {
         className="mx-auto grid w-full max-w-[1400px] grid-cols-1 gap-5 px-3 py-4 md:px-6 lg:grid-cols-[minmax(0,57%)_minmax(0,1fr)_150px] lg:items-start lg:py-6"
         dir="ltr"
       >
-        <section className="rounded-[22px] border-[4px] border-[#D2008A] bg-[#F5F6FB] p-3 shadow-[0_12px_30px_rgba(40,40,80,0.15)]" dir="rtl">
+        <section
+          className="rounded-[22px] border-[4px] border-[#D2008A] bg-[#F5F6FB] p-3 shadow-[0_12px_30px_rgba(40,40,80,0.15)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-hidden lg:hover:overflow-y-auto"
+          dir="rtl"
+        >
           <div className="overflow-hidden rounded-[18px] border border-[#B89BEA] bg-white">
             <header
               className="relative h-[220px] overflow-hidden rounded-b-[28px] p-4 md:h-[275px]"
@@ -91,9 +100,9 @@ export default function TextsCustomizePage() {
                   <Image src="/Mask group@2x.png" alt="student" fill className="object-cover" />
                 </div>
                 <div className="text-right text-white">
-                  <p className="text-[10px] text-white/75 md:text-[11px]">من أول مستقبل آمن</p>
-                  <h2 className="text-lg font-extrabold leading-tight md:text-2xl">مدرسة تمكين</h2>
-                  <p className="mt-1 text-xs font-semibold md:text-lg">مدرسة دروس خصوصية للطور الابتدائي</p>
+                  <p className="text-[10px] text-white/75 md:text-[11px]">{texts.homeTagline}</p>
+                  <h2 className="text-lg font-extrabold leading-tight md:text-2xl">{texts.homeTitle}</h2>
+                  <p className="mt-1 text-xs font-semibold md:text-lg">{texts.homeDescription}</p>
                   <button className="mt-3 rounded bg-[#D2008A] px-4 py-1 text-[10px] font-bold md:text-xs">تسجيل الدخول</button>
                 </div>
               </div>
@@ -104,7 +113,7 @@ export default function TextsCustomizePage() {
             <div className="px-4 py-5 md:px-6 md:py-6">
               {sections.about && (
                 <>
-                  <h3 className="text-right text-xl font-extrabold text-[#241646] md:text-2xl">{texts.aboutTitle}</h3>
+                  <h3 className="text-right text-lg font-extrabold text-[#241646] md:text-xl">{texts.aboutTitle}</h3>
                   <p className="mt-2 text-right text-[11px] font-semibold text-[#241646]/80 md:text-xs">{texts.aboutDescription}</p>
                 </>
               )}
@@ -127,8 +136,8 @@ export default function TextsCustomizePage() {
 
               {sections.gallery && (
                 <div className="mt-7 text-right">
-                  <h4 className="text-xl font-extrabold text-[#241646] md:text-2xl">{texts.galleryTitle}</h4>
-                  <p className="text-[11px] font-semibold text-[#241646]/70 md:text-xs">أبرز اللقطات داخل المؤسسة</p>
+                  <h4 className="text-lg font-extrabold text-[#241646] md:text-xl">{texts.galleryTitle}</h4>
+                  <p className="text-[11px] font-semibold text-[#241646]/70 md:text-xs">{texts.galleryDescription}</p>
                 </div>
               )}
             </div>
@@ -137,37 +146,36 @@ export default function TextsCustomizePage() {
 
         <section className="space-y-4" dir="rtl">
           <div className="rounded-2xl border-2 border-[#1E163C] bg-white p-5">
-            <h1 className="text-center text-2xl font-extrabold text-[#241646]">نصوص صفحة المدرسة</h1>
+            <h1 className="text-center text-xl font-extrabold text-[#241646]">نصوص صفحة المدرسة</h1>
             <p className="mt-2 text-center text-xs font-semibold text-[#241646]/80">قم باختيار الاجزاء وادخال نصوصها</p>
 
-            <div className="mt-4">
-              <div className="flex items-center justify-between rounded-lg border-2 border-[#1E163C] bg-white px-4 py-3">
-                <span className="text-sm font-extrabold text-[#241646]">
-                  {openPanel === 'home' ? 'الرئيسية' : openPanel === 'about' ? 'من نحن' : 'المعرض'}
-                </span>
-                <span className="text-[#1E163C]" aria-hidden="true">
-                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M6.75 6 10 9.25 13.25 6l1.5 1.5L10 12.25 5.25 7.5z" />
-                  </svg>
-                </span>
-              </div>
-            </div>
-
             <div className="mt-4 space-y-3">
-              <AccordionRow label="من نحن" open={openPanel === 'about'} onToggle={() => setOpenPanel('about')} />
+              <AccordionCard label="الرئيسية" open={openPanel === 'home'} onToggle={() => togglePanel('home')}>
+                  <label className="block text-right text-xs font-extrabold text-[#241646]">النص العلوي</label>
+                  <input
+                    value={texts.homeTagline}
+                    onChange={(e) => setText('homeTagline', e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-[#D7D7E3] bg-[#F1F2F6] px-3 py-2 text-right text-xs font-semibold text-[#241646] outline-none"
+                  />
 
-              {openPanel === 'about' && (
-                <div className="rounded-2xl border-2 border-[#1E163C] bg-white p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm font-extrabold text-[#241646]">من نحن</span>
-                    <span className="text-[#1E163C]" aria-hidden="true">
-                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M6 6h8v8H6z" />
-                      </svg>
-                    </span>
-                  </div>
+                  <label className="mt-4 block text-right text-xs font-extrabold text-[#241646]">عنوان الرئيسية</label>
+                  <input
+                    value={texts.homeTitle}
+                    onChange={(e) => setText('homeTitle', e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-[#D7D7E3] bg-[#F1F2F6] px-3 py-2 text-right text-xs font-semibold text-[#241646] outline-none"
+                  />
 
-                  <label className="block text-right text-sm font-extrabold text-[#241646]">العنوان</label>
+                  <label className="mt-4 block text-right text-xs font-extrabold text-[#241646]">وصف الرئيسية</label>
+                  <textarea
+                    value={texts.homeDescription}
+                    onChange={(e) => setText('homeDescription', e.target.value)}
+                    className="mt-2 w-full resize-none rounded-lg border border-[#D7D7E3] bg-[#F1F2F6] p-3 text-right text-xs font-semibold text-[#241646] outline-none"
+                    rows={2}
+                  />
+              </AccordionCard>
+
+              <AccordionCard label="من نحن" open={openPanel === 'about'} onToggle={() => togglePanel('about')}>
+                  <label className="block text-right text-xs font-extrabold text-[#241646]">العنوان</label>
                   <textarea
                     value={texts.aboutTitle}
                     onChange={(e) => setText('aboutTitle', e.target.value)}
@@ -175,56 +183,65 @@ export default function TextsCustomizePage() {
                     rows={2}
                   />
 
-                  <label className="mt-4 block text-right text-sm font-extrabold text-[#241646]">الوصف</label>
+                  <label className="mt-4 block text-right text-xs font-extrabold text-[#241646]">الوصف</label>
                   <textarea
                     value={texts.aboutDescription}
                     onChange={(e) => setText('aboutDescription', e.target.value)}
                     className="mt-2 w-full resize-none rounded-lg border border-[#D7D7E3] bg-[#F1F2F6] p-3 text-right text-xs font-semibold text-[#241646] outline-none"
                     rows={3}
                   />
-                </div>
-              )}
+              </AccordionCard>
 
-              <AccordionRow label="المعرض" open={openPanel === 'gallery'} onToggle={() => setOpenPanel('gallery')} />
-
-              {openPanel === 'gallery' && (
-                <div className="rounded-2xl border-2 border-[#1E163C] bg-white p-4">
-                  <label className="block text-right text-sm font-extrabold text-[#241646]">العنوان</label>
+              <AccordionCard label="المعرض" open={openPanel === 'gallery'} onToggle={() => togglePanel('gallery')}>
+                  <label className="block text-right text-xs font-extrabold text-[#241646]">العنوان</label>
                   <input
                     value={texts.galleryTitle}
                     onChange={(e) => setText('galleryTitle', e.target.value)}
                     className="mt-2 w-full rounded-lg border border-[#D7D7E3] bg-[#F1F2F6] px-3 py-2 text-right text-xs font-semibold text-[#241646] outline-none"
                   />
-                </div>
-              )}
+
+                  <label className="mt-4 block text-right text-xs font-extrabold text-[#241646]">الوصف</label>
+                  <textarea
+                    value={texts.galleryDescription}
+                    onChange={(e) => setText('galleryDescription', e.target.value)}
+                    className="mt-2 w-full resize-none rounded-lg border border-[#D7D7E3] bg-[#F1F2F6] p-3 text-right text-xs font-semibold text-[#241646] outline-none"
+                    rows={2}
+                  />
+              </AccordionCard>
             </div>
           </div>
         </section>
 
-        <aside className="rounded-[18px] bg-gradient-to-b from-[#F20A9D] to-[#C60086] p-3 text-white shadow-xl" dir="rtl">
-          <div className="mb-4 flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-2 py-2 text-xs font-bold">
+        <aside className="flex min-h-[calc(100vh-2rem)] flex-col rounded-[18px] bg-gradient-to-b from-[#F20A9D] to-[#C60086] p-3 text-white shadow-xl lg:sticky lg:top-4" dir="rtl">
+          <div className="mb-4 flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-2 py-2 text-[11px] font-bold">
             <Image src="/assets/logo.png" alt="logo" width={72} height={28} />
           </div>
 
-          <div className="space-y-3">
+          <div className="flex-1 space-y-3">
             {tools.map((tool) => {
-              const className = `flex w-full flex-col items-center justify-center rounded-xl px-2 py-3 text-center transition ${
-                tool.id === 'text' ? 'bg-[#9E79F7]' : 'hover:bg-white/15'
+              const className = `flex w-full flex-col items-center justify-center rounded-xl px-2 py-2.5 text-center transition-all duration-200 ${
+                tool.id === 'text'
+                  ? 'bg-[#9E79F7] shadow-[0_10px_22px_rgba(34,16,80,0.35)]'
+                  : 'hover:-translate-y-0.5 hover:bg-white/20 hover:shadow-[0_8px_18px_rgba(22,8,45,0.28)]'
               }`;
 
               if (tool.href) {
                 return (
                   <Link key={tool.id} href={tool.href} className={className}>
-                    <span className="text-xl leading-none">{tool.icon}</span>
-                    <span className="mt-1 text-xs font-bold">{tool.label}</span>
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
+                      <Image src={tool.iconSrc} alt={tool.label} width={22} height={22} className="h-5 w-5 object-contain" />
+                    </span>
+                    <span className="mt-1 text-sm font-extrabold">{tool.label}</span>
                   </Link>
                 );
               }
 
               return (
                 <button key={tool.id} type="button" className={className}>
-                  <span className="text-xl leading-none">{tool.icon}</span>
-                  <span className="mt-1 text-xs font-bold">{tool.label}</span>
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
+                    <Image src={tool.iconSrc} alt={tool.label} width={22} height={22} className="h-5 w-5 object-contain" />
+                  </span>
+                  <span className="mt-1 text-sm font-extrabold">{tool.label}</span>
                 </button>
               );
             })}

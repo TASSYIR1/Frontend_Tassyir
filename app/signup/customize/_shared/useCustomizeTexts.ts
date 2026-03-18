@@ -2,16 +2,27 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-export type TextKey = 'aboutTitle' | 'aboutDescription' | 'galleryTitle';
+export type TextKey =
+  | 'homeTagline'
+  | 'homeTitle'
+  | 'homeDescription'
+  | 'aboutTitle'
+  | 'aboutDescription'
+  | 'galleryTitle'
+  | 'galleryDescription';
 export type CustomizeTextsState = Record<TextKey, string>;
 
 const STORAGE_KEY = 'tassyir_customize_texts_v1';
 
 const defaultTexts: CustomizeTextsState = {
+  homeTagline: 'من أول مستقبل آمن',
+  homeTitle: 'مدرسة تمكين',
+  homeDescription: 'مدرسة دروس خصوصية للطور الابتدائي',
   aboutTitle: 'من نحن ؟',
   aboutDescription:
     'مدرسة دروس خصوصية للطور الابتدائي ومدرسة دروس خصوصية للطور الابتدائي ومدرسة دروس خصوصية للطور الابتدائي',
   galleryTitle: 'معرض الصور',
+  galleryDescription: 'أبرز اللقطات داخل المؤسسة',
 };
 
 export function useCustomizeTexts() {
