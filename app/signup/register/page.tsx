@@ -90,8 +90,9 @@ export default function RegisterPage() {
     if (value.trim()) {
       setErrors((prev) => {
         if (!prev[field]) return prev;
-        const { [field]: _removed, ...rest } = prev;
-        return rest;
+        const nextErrors = { ...prev };
+        delete nextErrors[field];
+        return nextErrors;
       });
       setPopupErrors((prev) => prev.filter((m) => !m.includes(fieldLabels[field])));
     }

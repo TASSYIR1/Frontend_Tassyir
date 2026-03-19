@@ -28,9 +28,9 @@ export default function Services() {
           {/* Read more link */}
           <a
             href="#"
-            className="flex items-center gap-2 text-[#2d2d5e] font-semibold text-sm mt-2 group"
+            className="flex items-center gap-2 text-[#2d2d5e] font-semibold text-sm mt-2 group hover:scale-105 hover:text-[#D2008A] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#D2008A] focus:outline-none"
           >
-            <span className="w-2 h-5 bg-[#D2008A] rounded-sm inline-block" />
+            <span className="w-2 h-5 bg-[#D2008A] rounded-sm inline-block group-hover:scale-110 transition-transform duration-200" />
             <span className="group-hover:text-[#D2008A] transition-colors duration-200">
               اقرا المزيد
             </span>
@@ -52,14 +52,17 @@ export default function Services() {
       <div className="relative z-10 w-full max-w-7xl flex flex-col-reverse md:flex-row items-center justify-between gap-10">
         {/* Left: Mockup image */}
 <div className="w-full md:w-[55%] lg:w-[60%] flex items-center justify-center -translate-x-40 translate-y-5 md:-translate-x-50 lg:-translate-x-70">
-  <Image
-    src="assets/Group 333.png"
-    alt="Services mockup"
-    width={700}
-    height={460}
-    className="w-full max-w-[620px] h-auto object-contain drop-shadow-xl"
-    priority
-  />
+  <div className="group transition-transform duration-300">
+    <Image
+      src="assets/Group 333.png"
+      alt="Services mockup"
+      width={700}
+      height={460}
+      className="w-full max-w-[620px] h-auto object-contain group-hover:scale-110 transition-transform duration-300"
+      style={{ filter: 'drop-shadow(0 8px 32px #BBA2ED88)' }}
+      priority
+    />
+  </div>
 </div>
 
         
