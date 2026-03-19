@@ -26,9 +26,20 @@ interface HeaderProps {
   setPage?: (page: PageKey) => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  restrictedPages?: PageKey[];
+  sectionLabel?: string;
+  roleCaption?: string;
 }
 
-export default function Header({ currentPage, setPage, sidebarOpen, onToggleSidebar }: HeaderProps) {
+export default function Header({
+  currentPage,
+  setPage,
+  sidebarOpen,
+  onToggleSidebar,
+  restrictedPages = [],
+  sectionLabel = "لوحة القيادة",
+  roleCaption = "Admin",
+}: HeaderProps) {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -50,9 +61,10 @@ export default function Header({ currentPage, setPage, sidebarOpen, onToggleSide
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const searchResults = Object.entries(pageTitles).filter(([key, title]) =>
-    title.includes(searchQuery) || key.includes(searchQuery.toLowerCase())
-  );
+  const searchResults = Object.entries(pageTitles).filter(([key, title]) => {
+    const blocked = restrictedPages.includes(key as PageKey);
+    return !blocked && (title.includes(searchQuery) || key.includes(searchQuery.toLowerCase()));
+  });
 
   const [notifications, setNotifications] = useState([
     { id: 1, title: "تم تسجيل طالب جديد", time: "منذ 5 دقائق", read: false },
@@ -91,7 +103,7 @@ export default function Header({ currentPage, setPage, sidebarOpen, onToggleSide
             {pageTitles[currentPage]}
           </h1>
           <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-400 mt-1">
-            <span className="text-[#e01c8a] hover:text-rose-600 transition-colors cursor-pointer">لوحة القيادة</span>
+            <span className="text-[#e01c8a] hover:text-rose-600 transition-colors cursor-pointer">{sectionLabel}</span>
             <span className="text-gray-300">/</span>
             <span>{pageTitles[currentPage]}</span>
           </div>
@@ -158,7 +170,7 @@ export default function Header({ currentPage, setPage, sidebarOpen, onToggleSide
         <div ref={notifRef} className="relative">
           <button 
             onClick={() => setShowNotifs(!showNotifs)}
-            className={`relative w-10 h-10 flex flex-shrink-0 items-center justify-center rounded-full border transition-all duration-300 shadow-sm hover:shadow-md ${showNotifs ? 'bg-rose-50 border-rose-200 text-[#e01c8a]' : 'bg-gray-50/80 border-gray-200 hover:bg-rose-50 hover:border-rose-200 text-gray-500 hover:text-[#e01c8a]'}`}
+            className={`relative w-10 h-10 flex shrink-0 items-center justify-center rounded-full border transition-all duration-300 shadow-sm hover:shadow-md ${showNotifs ? 'bg-rose-50 border-rose-200 text-[#e01c8a]' : 'bg-gray-50/80 border-gray-200 hover:bg-rose-50 hover:border-rose-200 text-gray-500 hover:text-[#e01c8a]'}`}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={unreadCount > 0 ? "animate-pulse" : ""}>
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
@@ -170,7 +182,7 @@ export default function Header({ currentPage, setPage, sidebarOpen, onToggleSide
 
           {/* Notifications Dropdown */}
           {showNotifs && (
-            <div className="absolute top-full right-[-60px] md:right-0 left-auto mt-3 w-[320px] bg-white border border-gray-100 rounded-3xl shadow-xl shadow-gray-200/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200 flex flex-col">
+            <div className="absolute top-full -right-15 md:right-0 left-auto mt-3 w-[320px] bg-white border border-gray-100 rounded-3xl shadow-xl shadow-gray-200/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200 flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/50">
                 <span className="text-[#2d2d5e] font-black text-[15px]">الإشعارات</span>
                 {unreadCount > 0 && (
@@ -182,7 +194,7 @@ export default function Header({ currentPage, setPage, sidebarOpen, onToggleSide
                   </button>
                 )}
               </div>
-              <div className="max-h-[340px] overflow-y-auto flex flex-col p-2 gap-1">
+              <div className="max-h-85 overflow-y-auto flex flex-col p-2 gap-1">
                 {notifications.length > 0 ? (
                   notifications.map((notif) => (
                     <button 
@@ -192,7 +204,7 @@ export default function Header({ currentPage, setPage, sidebarOpen, onToggleSide
                       }}
                       className={`text-right flex items-start gap-4 p-3 rounded-2xl transition-all duration-300 border border-transparent ${notif.read ? 'hover:bg-gray-50' : 'bg-rose-50/50 border-rose-100 hover:bg-rose-50'}`}
                     >
-                      <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${notif.read ? 'bg-gray-300' : 'bg-[#e01c8a] shadow-[0_0_8px_rgba(224,28,138,0.5)]'}`} />
+                      <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${notif.read ? 'bg-gray-300' : 'bg-[#e01c8a] shadow-[0_0_8px_rgba(224,28,138,0.5)]'}`} />
                       <div className="flex flex-col gap-1">
                         <span className={`text-[13px] font-bold ${notif.read ? 'text-gray-600' : 'text-[#2d2d5e]'}`}>
                           {notif.title}
@@ -221,9 +233,9 @@ export default function Header({ currentPage, setPage, sidebarOpen, onToggleSide
         <button className="flex items-center gap-3 p-1 md:pr-3 rounded-full hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all duration-300 group">
           <div className="hidden md:flex flex-col leading-none text-right">
             <span className="text-[#2d2d5e] font-black text-sm group-hover:text-[#e01c8a] transition-colors">تمكين</span>
-            <span className="text-gray-400 font-bold text-[9px] tracking-widest uppercase mt-1">Admin</span>
+            <span className="text-gray-400 font-bold text-[9px] tracking-widest uppercase mt-1">{roleCaption}</span>
           </div>
-          <div className="w-10 h-10 bg-gradient-to-br from-[#e01c8a] to-rose-400 rounded-full flex items-center justify-center shadow-md shadow-rose-200 group-hover:shadow-lg group-hover:-translate-y-0.5 transition-all duration-300 border-2 border-white ring-2 ring-transparent group-hover:ring-rose-100 flex-shrink-0">
+          <div className="w-10 h-10 bg-linear-to-br from-[#e01c8a] to-rose-400 rounded-full flex items-center justify-center shadow-md shadow-rose-200 group-hover:shadow-lg group-hover:-translate-y-0.5 transition-all duration-300 border-2 border-white ring-2 ring-transparent group-hover:ring-rose-100 shrink-0">
             <span className="text-white font-black text-sm">ت</span>
           </div>
         </button>

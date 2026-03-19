@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect, ReactNode } from "react";
+import { useState, useRef, useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { readSharedSchedules, SharedScheduleEntry } from "@/lib/sharedSchedule";
+import DashboardNavButton from "@/components/DashboardNavButton";
 
 // --- Types ---
 type StudentPageKey =
@@ -11,6 +13,35 @@ type StudentPageKey =
   | "attendance"
   | "payments"
   | "announcements";
+
+type Announcement = {
+  id: number;
+  type: "admin" | "teacher";
+  title: string;
+  preview: string;
+  fullText: string;
+  time: string;
+  color: string;
+  teacher?: string;
+};
+
+type ScheduleSession = {
+  id: string;
+  day: string;
+  time: string;
+  subject: string;
+  teacher: string;
+  room: string;
+  group: string;
+};
+
+type StudentAttendanceRecord = {
+  id: string;
+  date: string;
+  subject: string;
+  status: "حاضر" | "غائب" | "متأخر";
+  justification: string;
+};
 
 const pageTitles: Record<StudentPageKey, string> = {
   home: "الرئيسية",
@@ -40,39 +71,6 @@ const navLinks: { label: string; page: StudentPageKey; icon: ReactNode }[] = [
   { label: "المدفوعات",         page: "payments",      icon: Icons.payments },
   { label: "الإعلانات",         page: "announcements", icon: Icons.announcements },
 ];
-
-function NavBtn({
-  label,
-  icon,
-  active,
-  onClick,
-}: {
-  label: string;
-  icon: ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`group flex items-center justify-between px-4 py-3.5 rounded-xl text-[15px] font-black w-full text-right transition-all duration-300 ${
-        active 
-          ? "bg-white/20 text-white shadow-md border border-white/20 backdrop-blur-sm scale-[1.02]" 
-          : "text-white/80 hover:bg-white/10 hover:text-white border border-transparent hover:translate-x-1"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <span className={`transition-all duration-300 ${active ? "scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" : "group-hover:scale-110"}`}>
-          {icon}
-        </span>
-        {label}
-      </div>
-      {active && (
-        <span className="w-1.5 h-6 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] animate-pulse" />
-      )}
-    </button>
-  );
-}
 
 // --- Components ---
 
@@ -111,7 +109,9 @@ export default function StudentDashboard() {
   const [toastMessage, setToastMessage] = useState<{msg: string, type: 'success'|'info'|'error'} | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState<any>(null);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [selectedScheduleSession, setSelectedScheduleSession] = useState<ScheduleSession | null>(null);
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState("2026-03-12");
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
 
   const showToast = (msg: string, type: 'success'|'info'|'error' = 'success') => {
@@ -126,7 +126,7 @@ export default function StudentDashboard() {
     }, 1500);
   };
 
-  const announcements = [
+  const announcements: Announcement[] = [
     {
       id: 1,
       type: 'admin',
@@ -177,10 +177,61 @@ export default function StudentDashboard() {
     { id: 2, title: "تذكير: واجب الفيزياء غداً", time: "منذ ساعتين", read: false },
   ]);
 
+  const studentGroup = "AB12";
+  const [sharedSchedules, setSharedSchedules] = useState<SharedScheduleEntry[]>(() => readSharedSchedules());
+
+  useEffect(() => {
+    const syncSchedules = () => setSharedSchedules(readSharedSchedules());
+    window.addEventListener("storage", syncSchedules);
+    return () => window.removeEventListener("storage", syncSchedules);
+  }, []);
+
   const unreadCount = notifications.filter(n => !n.read).length;
   const markAllAsRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
 
-  const content = useMemo(() => {
+  const adminGroupSchedules = sharedSchedules
+    .filter((item) => item.targetType === "group" && item.targetValue === studentGroup)
+    .map((item) => ({
+      day: item.day,
+      time: item.time,
+      subject: item.subject,
+      teacher: item.teacher,
+      room: item.room,
+    }));
+
+  const dayOrder = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+  const studentScheduleSessions: ScheduleSession[] = [
+    { id: "S-1", day: "الإثنين", time: "08:30 - 10:00 ص", subject: "الرياضيات", teacher: "أ. أحمد", room: "قاعة 203", group: studentGroup },
+    { id: "S-2", day: "الإثنين", time: "10:15 - 12:00 م", subject: "الفيزياء", teacher: "أ. سارة", room: "قاعة 107", group: studentGroup },
+    { id: "S-3", day: "الثلاثاء", time: "09:00 - 11:00 ص", subject: "العلوم", teacher: "أ. محمود", room: "مختبر 1", group: studentGroup },
+    ...adminGroupSchedules.map((row, index) => ({
+      id: `SA-${index}`,
+      day: row.day,
+      time: row.time,
+      subject: row.subject,
+      teacher: row.teacher,
+      room: row.room,
+      group: studentGroup,
+    })),
+  ];
+
+  const studentScheduleByDay = dayOrder.reduce<Record<string, ScheduleSession[]>>((acc, day) => {
+    acc[day] = studentScheduleSessions.filter((session) => session.day === day);
+    return acc;
+  }, {});
+
+  const attendanceRecords: StudentAttendanceRecord[] = [
+    { id: "ST-AT-1", date: "2026-03-12", subject: "الرياضيات", status: "حاضر", justification: "-" },
+    { id: "ST-AT-2", date: "2026-03-12", subject: "الفيزياء", status: "غائب", justification: "تم تقديم عذر طبي" },
+    { id: "ST-AT-3", date: "2026-03-11", subject: "العلوم", status: "متأخر", justification: "10 دقائق" },
+    { id: "ST-AT-4", date: "2026-03-11", subject: "الفرنسية", status: "حاضر", justification: "-" },
+  ];
+  const filteredAttendance = attendanceRecords.filter((row) => row.date === selectedAttendanceDate);
+  const presentCount = filteredAttendance.filter((row) => row.status === "حاضر").length;
+  const absentCount = filteredAttendance.filter((row) => row.status === "غائب").length;
+  const lateCount = filteredAttendance.filter((row) => row.status === "متأخر").length;
+
+  const content = (() => {
     switch (currentPage) {
       case "home":
         return (
@@ -252,53 +303,40 @@ export default function StudentDashboard() {
 
       case "schedule":
         return (
-          <SectionCard title="الجدول الدراسي (الحصص والاشتراكات)">
-            <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0">
-              <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-gray-100">
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">اليوم / الوقت</th>
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">المادة</th>
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">المعلم</th>
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">القاعة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-4">
-                      <p className="font-black text-[#2d2d5e] text-sm">الإثنين</p>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">08:30 - 10:00 ص</p>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-sm font-bold border border-blue-100">الرياضيات</span>
-                    </td>
-                    <td className="py-4 px-4 font-bold text-gray-600">أ. أحمد</td>
-                    <td className="py-4 px-4 font-bold text-gray-600">قاعة 203</td>
-                  </tr>
-                  <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-4">
-                      <p className="font-black text-[#2d2d5e] text-sm">الإثنين</p>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">10:15 - 12:00 م</p>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="bg-purple-50 text-purple-600 px-3 py-1 rounded-lg text-sm font-bold border border-purple-100">الفيزياء</span>
-                    </td>
-                    <td className="py-4 px-4 font-bold text-gray-600">أ. سارة</td>
-                    <td className="py-4 px-4 font-bold text-gray-600">قاعة 107</td>
-                  </tr>
-                  <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-4">
-                      <p className="font-black text-[#2d2d5e] text-sm">الثلاثاء</p>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">09:00 - 11:00 ص</p>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="bg-green-50 text-green-600 px-3 py-1 rounded-lg text-sm font-bold border border-green-100">العلوم</span>
-                    </td>
-                    <td className="py-4 px-4 font-bold text-gray-600">أ. محمود</td>
-                    <td className="py-4 px-4 font-bold text-gray-600">مختبر 1</td>
-                  </tr>
-                </tbody>
-              </table>
+          <SectionCard title="الجدول الدراسي الأسبوعي (نفس نمط الإدارة)">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {dayOrder.map((day) => (
+                <div key={day} className="bg-gray-50 rounded-2xl border border-gray-100 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-black text-[#2d2d5e] text-sm">{day}</h4>
+                    <span className="bg-white border border-gray-200 text-gray-500 text-xs font-bold px-2 py-1 rounded-lg">
+                      {studentScheduleByDay[day].length} حصة
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {studentScheduleByDay[day].length === 0 && (
+                      <div className="border border-dashed border-gray-200 rounded-xl px-3 py-4 text-center text-xs font-bold text-gray-400 bg-white">
+                        لا توجد حصص
+                      </div>
+                    )}
+
+                    {studentScheduleByDay[day].map((session) => (
+                      <button
+                        key={session.id}
+                        onClick={() => setSelectedScheduleSession(session)}
+                        className="w-full text-right bg-white border border-gray-200 hover:border-[#e01c8a]/40 rounded-xl p-3 transition-all hover:shadow-sm"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[#2d2d5e] font-black text-sm">{session.subject}</span>
+                          <span className="text-[#e01c8a] bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md text-[10px] font-black">{session.time}</span>
+                        </div>
+                        <p className="text-xs text-gray-600 font-bold">{session.teacher} • {session.room}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </SectionCard>
         );
@@ -385,18 +423,31 @@ export default function StudentDashboard() {
       case "attendance":
         return (
           <SectionCard title="الحضور والغياب (سجل الحضور والتأخير)">
+             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+               <div>
+                 <label className="mb-1 block text-xs font-bold text-gray-500">اختر اليوم</label>
+                 <input
+                   type="date"
+                   value={selectedAttendanceDate}
+                   onChange={(e) => setSelectedAttendanceDate(e.target.value)}
+                   className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#2d2d5e] focus:border-[#e01c8a]/40 focus:outline-none"
+                 />
+               </div>
+               <p className="text-xs font-bold text-gray-400">عرض الحضور لهذا اليوم فقط</p>
+             </div>
+
              <div className="flex gap-4 mb-6">
                <div className="bg-green-50 border border-green-200 px-4 py-3 rounded-xl flex-1 flex justify-between items-center">
                  <span className="font-bold text-green-800 text-sm">حضور</span>
-                 <span className="font-black text-green-600 text-xl">42</span>
+                 <span className="font-black text-green-600 text-xl">{presentCount}</span>
                </div>
                <div className="bg-red-50 border border-red-200 px-4 py-3 rounded-xl flex-1 flex justify-between items-center">
                  <span className="font-bold text-red-800 text-sm">غياب</span>
-                 <span className="font-black text-red-600 text-xl">2</span>
+                 <span className="font-black text-red-600 text-xl">{absentCount}</span>
                </div>
                <div className="bg-amber-50 border border-amber-200 px-4 py-3 rounded-xl flex-1 flex justify-between items-center">
                  <span className="font-bold text-amber-800 text-sm">تأخير</span>
-                 <span className="font-black text-amber-500 text-xl">1</span>
+                 <span className="font-black text-amber-500 text-xl">{lateCount}</span>
                </div>
              </div>
 
@@ -411,30 +462,47 @@ export default function StudentDashboard() {
                    </tr>
                  </thead>
                  <tbody>
-                   <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                     <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">12 مارس 2026</td>
-                     <td className="py-4 px-4 font-bold text-gray-600 text-sm">الرياضيات</td>
-                     <td className="py-4 px-4">
-                       <span className="bg-green-100 text-green-700 font-bold px-3 py-1 rounded-lg text-xs">حاضر</span>
-                     </td>
-                     <td className="py-4 px-4 text-sm text-gray-400">-</td>
-                   </tr>
-                   <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                     <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">10 مارس 2026</td>
-                     <td className="py-4 px-4 font-bold text-gray-600 text-sm">الفيزياء</td>
-                     <td className="py-4 px-4">
-                       <span className="bg-red-100 text-red-700 font-bold px-3 py-1 rounded-lg text-xs">غائب</span>
-                     </td>
-                     <td className="py-4 px-4 text-sm font-bold text-blue-500 underline cursor-pointer" onClick={() => showToast("عرض العذر الطبي المرفق...", "info")}>تم تقديم عذر طبي</td>
-                   </tr>
-                   <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                     <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">05 مارس 2026</td>
-                     <td className="py-4 px-4 font-bold text-gray-600 text-sm">العلوم</td>
-                     <td className="py-4 px-4">
-                       <span className="bg-amber-100 text-amber-700 font-bold px-3 py-1 rounded-lg text-xs">تأخير</span>
-                     </td>
-                     <td className="py-4 px-4 text-sm text-gray-500">10 دقائق</td>
-                   </tr>
+                   {filteredAttendance.length === 0 ? (
+                     <tr>
+                       <td colSpan={4} className="px-4 py-8 text-center text-sm font-bold text-gray-400">
+                         لا توجد بيانات حضور لهذا اليوم
+                       </td>
+                     </tr>
+                   ) : (
+                     filteredAttendance.map((row) => (
+                       <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                         <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">{row.date}</td>
+                         <td className="py-4 px-4 font-bold text-gray-600 text-sm">{row.subject}</td>
+                         <td className="py-4 px-4">
+                           <span
+                             className={`font-bold px-3 py-1 rounded-lg text-xs ${
+                               row.status === "حاضر"
+                                 ? "bg-green-100 text-green-700"
+                                 : row.status === "غائب"
+                                   ? "bg-red-100 text-red-700"
+                                   : "bg-amber-100 text-amber-700"
+                             }`}
+                           >
+                             {row.status}
+                           </span>
+                         </td>
+                         <td
+                           className={`py-4 px-4 text-sm ${
+                             row.justification.includes("عذر")
+                               ? "font-bold text-blue-500 underline cursor-pointer"
+                               : "text-gray-500"
+                           }`}
+                           onClick={() => {
+                             if (row.justification.includes("عذر")) {
+                               showToast("عرض العذر الطبي المرفق...", "info");
+                             }
+                           }}
+                         >
+                           {row.justification}
+                         </td>
+                       </tr>
+                     ))
+                   )}
                  </tbody>
                </table>
              </div>
@@ -519,7 +587,7 @@ export default function StudentDashboard() {
       default:
         return null;
     }
-  }, [currentPage, unreadCount]);
+  })();
 
   return (
     <>
@@ -527,7 +595,7 @@ export default function StudentDashboard() {
       
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-100 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="bg-white px-6 py-3 rounded-2xl shadow-xl shadow-rose-200/50 border border-rose-100 flex items-center gap-3">
             {toastMessage.type === 'info' && (
               <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
@@ -580,7 +648,7 @@ export default function StudentDashboard() {
               </div>
 
               <nav className="flex flex-col gap-1.5 px-4 mt-4">
-                <NavBtn
+                <DashboardNavButton
                   label="الرئيسية"
                   icon={Icons.home}
                   active={currentPage === "home"}
@@ -588,7 +656,7 @@ export default function StudentDashboard() {
                 />
                 
                 {navLinks.map((link) => (
-                  <NavBtn
+                  <DashboardNavButton
                     key={link.page}
                     label={link.label}
                     icon={link.icon}
@@ -840,7 +908,7 @@ export default function StudentDashboard() {
                 </div>
                 
                 <div className="p-6 space-y-4">
-                  <div className="bg-gradient-to-br from-rose-50 to-orange-50 border border-rose-100 rounded-2xl p-4">
+                  <div className="bg-linear-to-br from-rose-50 to-orange-50 border border-rose-100 rounded-2xl p-4">
                     <p className="text-sm text-gray-600 font-bold mb-2">المبلغ المستحق:</p>
                     <p className="text-3xl font-black text-[#e01c8a]">1500 درهم</p>
                   </div>
@@ -891,6 +959,49 @@ export default function StudentDashboard() {
                     >
                       متابعة الدفع
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedScheduleSession && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full animate-in scale-95 fade-in duration-300" dir="rtl">
+                <div className="border-b border-gray-100 px-6 py-5 flex items-center justify-between">
+                  <h2 className="font-black text-xl text-[#2d2d5e]">تفاصيل الحصة</h2>
+                  <button
+                    onClick={() => setSelectedScheduleSession(null)}
+                    className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-black text-gray-400 mb-1">اليوم</p>
+                    <p className="font-black text-[#2d2d5e]">{selectedScheduleSession.day}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-black text-gray-400 mb-1">التوقيت</p>
+                    <p className="font-black text-[#2d2d5e]">{selectedScheduleSession.time}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-black text-gray-400 mb-1">المادة</p>
+                    <p className="font-black text-[#2d2d5e]">{selectedScheduleSession.subject}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-black text-gray-400 mb-1">المعلم</p>
+                    <p className="font-black text-[#2d2d5e]">{selectedScheduleSession.teacher}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-black text-gray-400 mb-1">القاعة</p>
+                    <p className="font-black text-[#2d2d5e]">{selectedScheduleSession.room}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-black text-gray-400 mb-1">الفوج</p>
+                    <p className="font-black text-[#2d2d5e]">{selectedScheduleSession.group}</p>
                   </div>
                 </div>
               </div>

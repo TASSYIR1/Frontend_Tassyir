@@ -58,6 +58,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword]           = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [popupErrors, setPopupErrors]             = useState<string[]>([]);
+  const [submissionState, setSubmissionState]     = useState<'form' | 'first' | 'final'>('form');
 
   const requiredMessages: Record<FieldName, string> = {
     schoolName: 'هذا الحقل مطلوب',
@@ -131,6 +132,7 @@ export default function RegisterPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Form submitted:', formData);
+    setSubmissionState('first');
   };
 
   const steps = [
@@ -142,12 +144,73 @@ export default function RegisterPage() {
   const iconClass = 'w-4 h-4 text-gray-400 shrink-0';
   const stepAnimClass = animDir === 'forward' ? 'slide-forward' : 'slide-backward';
 
+  if (submissionState === 'first') {
+    return (
+      <SignupLayout>
+        <div className="flex flex-col items-center justify-center text-center max-w-3xl px-4 z-10" dir="rtl">
+          <h2 className="text-[#1F1B3D] text-[18px] sm:text-[22px] md:text-[26px] font-bold mb-8 leading-[1.8]">
+            "بعد إتمام التسجيل، سيقوم فريقنا بالاتصال بك على الرقم {formData.phone || '05XXXXXXXX'}
+            <br />
+            لتأكيد اشتراككم وتفعيل حساب المدرسة خلال 24 ساعة"
+          </h2>
+          
+          <div className="flex items-center justify-center gap-4">
+            <button 
+              type="button"
+              className="bg-[#D2008A] text-white font-semibold py-2 px-12 md:px-16 rounded shadow-sm hover:opacity-90 transition-opacity text-sm"
+              onClick={() => setSubmissionState('final')}
+            >
+              تسجيل
+            </button>
+            <button 
+              type="button"
+              className="border border-[#D2008A] text-[#D2008A] bg-white font-semibold py-2 px-12 md:px-16 rounded shadow-sm hover:bg-pink-50 transition-colors text-sm"
+              onClick={() => setSubmissionState('form')}
+            >
+              العودة
+            </button>
+          </div>
+        </div>
+      </SignupLayout>
+    );
+  }
+
+  if (submissionState === 'final') {
+    return (
+      <SignupLayout>
+        <div className="flex flex-col items-center justify-center text-center max-w-3xl px-4 z-10" dir="rtl">
+          <div className="space-y-4 mb-8">
+            <h2 className="text-[#1F1B3D] text-[20px] sm:text-[24px] md:text-[28px] font-bold mb-2">
+              تم استلام طلبكم بنجاح
+            </h2>
+            <h3 className="text-[#1F1B3D] text-[18px] sm:text-[22px] md:text-[24px] font-bold mb-6">
+              رقم الطلب: REQ-2026-001
+            </h3>
+            <p className="text-[#1F1B3D] text-[16px] sm:text-[20px] md:text-[22px] font-bold leading-relaxed">
+              سنتواصل معكم قريباً على الرقم المسجل لتأكيد الحساب وتفعيله.
+              <br />
+              يمكنكم متابعة حالة الطلب عبر البريد الإلكتروني.
+            </p>
+          </div>
+          
+          <button 
+            type="button"
+            className="border border-[#D2008A] text-[#D2008A] bg-transparent font-semibold py-2 px-12 md:px-16 rounded shadow-sm hover:bg-pink-50 transition-colors text-sm"
+            onClick={() => window.location.href = '/'}
+          >
+            العودة
+          </button>
+        </div>
+      </SignupLayout>
+    );
+  }
+
   return (
     <SignupLayout>
       <div className="w-full max-w-lg" dir="rtl">
 
         {/* ── Step Indicator ── */}
-        <div className="-mt-8 px-4 h-[92px] flex flex-col justify-start">
+        <div className="-mt-8 px-4 h-23 flex flex-col justify-start">
           {/* Top labels */}
           <div className="grid grid-cols-3 mb-2">
             {steps.map((step) => {
@@ -155,7 +218,7 @@ export default function RegisterPage() {
               return (
                 <div key={`top-${step.number}`} className="flex justify-center">
                   <p
-                    className={`h-9 text-[11.5px] font-semibold text-center max-w-[95px] leading-tight flex items-end justify-center
+                    className={`h-9 text-[11.5px] font-semibold text-center max-w-23.75 leading-tight flex items-end justify-center
                       ${isActive ? 'text-[#D2008A]' : 'text-gray-400'}`}
                   >
                     {step.label}
@@ -211,7 +274,7 @@ export default function RegisterPage() {
 
         {/* ── Form ── */}
         <form noValidate onSubmit={handleSubmit} className="space-y-0">
-          <div className="relative mt-3 min-h-[390px] overflow-hidden">
+          <div className="relative mt-3 min-h-97.5 overflow-hidden">
 
           {/* Each step wrapped in keyed div for re-triggering the animation */}
           {currentStep === 1 && (
@@ -303,7 +366,7 @@ export default function RegisterPage() {
 
           {currentStep === 2 && (
             <div key={`step2-${animKey}`} className={`flex justify-center ${stepAnimClass}`}>
-              <div className="w-full max-w-[420px] bg-white border border-gray-200 rounded-md px-8 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.06)]" dir="rtl">
+              <div className="w-full max-w-105 bg-white border border-gray-200 rounded-md px-8 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.06)]" dir="rtl">
 
                 {/* School Type */}
                 <div className="mb-8">
@@ -462,7 +525,7 @@ export default function RegisterPage() {
                 متابعة
               </button>
             ) : (
-              <button type="submit"
+              <button type="button" onClick={handleSubmit}
                 className="flex-1 bg-[#D2008A] text-white font-semibold py-2.5 rounded-lg hover:bg-[#b8006d] transition-colors duration-200 text-[13px]">
                 إرسال
               </button>

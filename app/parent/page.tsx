@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect, ReactNode } from "react";
+import { useState, useRef, useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { readSharedSchedules, SharedScheduleEntry } from "@/lib/sharedSchedule";
+import DashboardNavButton from "@/components/DashboardNavButton";
 
 // --- Types ---
 type ParentPageKey =
@@ -12,6 +14,25 @@ type ParentPageKey =
   | "payments"
   | "announcements"
   | "messages";
+
+type ParentScheduleSession = {
+  id: string;
+  day: string;
+  time: string;
+  subject: string;
+  teacher: string;
+  room: string;
+  group: string;
+};
+
+type ParentAttendanceRecord = {
+  id: string;
+  childId: number;
+  date: string;
+  subject: string;
+  status: "حاضر" | "غائب" | "متأخر";
+  notes: string;
+};
 
 const pageTitles: Record<ParentPageKey, string> = {
   home: "الرئيسية",
@@ -44,39 +65,6 @@ const navLinks: { label: string; page: ParentPageKey; icon: ReactNode }[] = [
   { label: "الإعلانات",       page: "announcements", icon: Icons.announcements },
   { label: "المراسلة",        page: "messages",      icon: Icons.messages },
 ];
-
-function NavBtn({
-  label,
-  icon,
-  active,
-  onClick,
-}: {
-  label: string;
-  icon: ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`group flex items-center justify-between px-4 py-3.5 rounded-xl text-[15px] font-black w-full text-right transition-all duration-300 ${
-        active 
-          ? "bg-white/20 text-white shadow-md border border-white/20 backdrop-blur-sm scale-[1.02]" 
-          : "text-white/80 hover:bg-white/10 hover:text-white border border-transparent hover:translate-x-1"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <span className={`transition-all duration-300 ${active ? "scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" : "group-hover:scale-110"}`}>
-          {icon}
-        </span>
-        {label}
-      </div>
-      {active && (
-        <span className="w-1.5 h-6 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] animate-pulse" />
-      )}
-    </button>
-  );
-}
 
 // --- Components ---
 
@@ -112,8 +100,8 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 // --- Mock Data ---
 
 const childrenData = [
-  { id: 1, name: "ياسين", level: "الثانية باكالوريا", subscriptions: 3 },
-  { id: 2, name: "مريم", level: "الجدع المشترك", subscriptions: 2 },
+  { id: 1, name: "ياسين", level: "الثانية باكالوريا", subscriptions: 3, group: "AB12" },
+  { id: 2, name: "مريم", level: "الجدع المشترك", subscriptions: 2, group: "CD14" },
 ];
 
 export default function ParentDashboardCoursSup() {
@@ -121,7 +109,10 @@ export default function ParentDashboardCoursSup() {
   const [currentPage, setCurrentPage] = useState<ParentPageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedChildId, setSelectedChildId] = useState<number>(1);
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState("2026-03-12");
+  const [selectedScheduleSession, setSelectedScheduleSession] = useState<ParentScheduleSession | null>(null);
   const [toastMessage, setToastMessage] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
+  const [sharedSchedules, setSharedSchedules] = useState<SharedScheduleEntry[]>(() => readSharedSchedules());
 
   const showToast = (message: string, type: 'success'|'error'|'info' = 'success') => {
     setToastMessage({ message, type });
@@ -157,6 +148,12 @@ export default function ParentDashboardCoursSup() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const syncSharedSchedules = () => setSharedSchedules(readSharedSchedules());
+    window.addEventListener("storage", syncSharedSchedules);
+    return () => window.removeEventListener("storage", syncSharedSchedules);
+  }, []);
+
   const searchResults = Object.entries(pageTitles).filter(([key, title]) =>
     title.includes(searchQuery) || key.includes(searchQuery.toLowerCase())
   );
@@ -169,7 +166,43 @@ export default function ParentDashboardCoursSup() {
   const unreadCount = notifications.filter(n => !n.read).length;
   const markAllAsRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
 
-  const content = useMemo(() => {
+  const dayOrder = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+  const baseParentSessions: ParentScheduleSession[] = [
+    { id: "P-S1", day: "الإثنين", time: "18:30 - 20:00 م", subject: "الرياضيات", teacher: "أ. أحمد", room: "قاعة 203", group: selectedChild.group },
+    { id: "P-S2", day: "الأربعاء", time: "18:30 - 20:00 م", subject: "الفيزياء", teacher: "أ. سارة", room: "قاعة 107", group: selectedChild.group },
+  ];
+  const adminParentSessions: ParentScheduleSession[] = sharedSchedules
+    .filter((item) => item.targetType === "group" && item.targetValue === selectedChild.group)
+    .map((item, index) => ({
+      id: `P-SA-${index}`,
+      day: item.day,
+      time: item.time,
+      subject: item.subject,
+      teacher: item.teacher,
+      room: item.room,
+      group: item.group,
+    }));
+  const parentScheduleSessions = [...baseParentSessions, ...adminParentSessions];
+  const parentScheduleByDay = dayOrder.reduce<Record<string, ParentScheduleSession[]>>((acc, day) => {
+    acc[day] = parentScheduleSessions.filter((session) => session.day === day);
+    return acc;
+  }, {});
+
+  const attendanceRecords: ParentAttendanceRecord[] = [
+    { id: "PA-1", childId: 1, date: "2026-03-12", subject: "الرياضيات", status: "حاضر", notes: "-" },
+    { id: "PA-2", childId: 1, date: "2026-03-12", subject: "الفيزياء", status: "غائب", notes: "تم إشعار الإدارة" },
+    { id: "PA-3", childId: 1, date: "2026-03-11", subject: "العلوم", status: "متأخر", notes: "تأخير 10 دقائق" },
+    { id: "PA-4", childId: 2, date: "2026-03-12", subject: "الفرنسية", status: "حاضر", notes: "-" },
+    { id: "PA-5", childId: 2, date: "2026-03-11", subject: "الرياضيات", status: "غائب", notes: "تقرير إداري" },
+  ];
+  const filteredParentAttendance = attendanceRecords.filter(
+    (row) => row.childId === selectedChild.id && row.date === selectedAttendanceDate,
+  );
+  const presentCount = filteredParentAttendance.filter((row) => row.status === "حاضر").length;
+  const absentCount = filteredParentAttendance.filter((row) => row.status === "غائب").length;
+  const lateCount = filteredParentAttendance.filter((row) => row.status === "متأخر").length;
+
+  const content = (() => {
     switch (currentPage) {
       case "home":
         return (
@@ -277,41 +310,42 @@ export default function ParentDashboardCoursSup() {
       case "schedule":
         return (
           <SectionCard title={`الجدول الدراسي - ${selectedChild.name}`}>
-            <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0">
-              <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-gray-100">
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">اليوم / الوقت</th>
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">المادة</th>
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">المعلم</th>
-                    <th className="py-4 px-4 font-black text-gray-400 text-sm w-1/4">القاعة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-4">
-                      <p className="font-black text-[#2d2d5e] text-sm">الإثنين</p>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">18:30 - 20:00 م</p>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-sm font-bold border border-blue-100">الرياضيات</span>
-                    </td>
-                    <td className="py-4 px-4 font-bold text-gray-600">أ. أحمد</td>
-                    <td className="py-4 px-4 font-bold text-gray-600">قاعة 203</td>
-                  </tr>
-                  <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-4">
-                      <p className="font-black text-[#2d2d5e] text-sm">الأربعاء</p>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">18:30 - 20:00 م</p>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="bg-purple-50 text-purple-600 px-3 py-1 rounded-lg text-sm font-bold border border-purple-100">الفيزياء</span>
-                    </td>
-                    <td className="py-4 px-4 font-bold text-gray-600">أ. سارة</td>
-                    <td className="py-4 px-4 font-bold text-gray-600">قاعة 107</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div className="space-y-6">
+              {dayOrder.map((day) => {
+                const sessions = parentScheduleByDay[day] ?? [];
+                return (
+                  <div key={day} className="rounded-2xl border border-gray-200 bg-white p-5">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="text-lg font-black text-[#2d2d5e]">{day}</h4>
+                      <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-[#e01c8a]">
+                        {sessions.length} حصص
+                      </span>
+                    </div>
+
+                    {sessions.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                        لا توجد حصص مبرمجة لهذا اليوم
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {sessions.map((session) => (
+                          <button
+                            key={session.id}
+                            type="button"
+                            onClick={() => setSelectedScheduleSession(session)}
+                            className="rounded-xl border border-gray-200 bg-white p-4 text-right transition-all hover:-translate-y-0.5 hover:border-[#e01c8a]/40 hover:shadow-md"
+                          >
+                            <p className="text-sm font-bold text-gray-400">{session.time}</p>
+                            <p className="mt-1 text-base font-black text-[#2d2d5e]">{session.subject}</p>
+                            <p className="mt-2 text-sm font-bold text-gray-600">{session.teacher}</p>
+                            <p className="text-xs font-bold text-gray-400">{session.room}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </SectionCard>
         );
@@ -319,18 +353,31 @@ export default function ParentDashboardCoursSup() {
       case "attendance":
         return (
           <SectionCard title={`سجل الحضور والغياب - ${selectedChild.name}`}>
+             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+               <div>
+                 <label className="mb-1 block text-xs font-bold text-gray-500">اختر اليوم</label>
+                 <input
+                   type="date"
+                   value={selectedAttendanceDate}
+                   onChange={(e) => setSelectedAttendanceDate(e.target.value)}
+                   className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#2d2d5e] focus:border-[#e01c8a]/40 focus:outline-none"
+                 />
+               </div>
+               <p className="text-xs font-bold text-gray-400">عرض الحضور لهذا اليوم فقط</p>
+             </div>
+
              <div className="flex gap-4 mb-6">
                <div className="bg-green-50 border border-green-200 px-4 py-3 rounded-xl flex-1 flex justify-between items-center">
                  <span className="font-bold text-green-800 text-sm">حضور</span>
-                 <span className="font-black text-green-600 text-xl">12</span>
+                 <span className="font-black text-green-600 text-xl">{presentCount}</span>
                </div>
                <div className="bg-red-50 border border-red-200 px-4 py-3 rounded-xl flex-1 flex justify-between items-center">
                  <span className="font-bold text-red-800 text-sm">غياب</span>
-                 <span className="font-black text-red-600 text-xl">1</span>
+                 <span className="font-black text-red-600 text-xl">{absentCount}</span>
                </div>
                <div className="bg-amber-50 border border-amber-200 px-4 py-3 rounded-xl flex-1 flex justify-between items-center">
                  <span className="font-bold text-amber-800 text-sm">تأخير</span>
-                 <span className="font-black text-amber-500 text-xl">0</span>
+                 <span className="font-black text-amber-500 text-xl">{lateCount}</span>
                </div>
              </div>
 
@@ -345,22 +392,34 @@ export default function ParentDashboardCoursSup() {
                    </tr>
                  </thead>
                  <tbody>
-                   <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                     <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">12 مارس 2026</td>
-                     <td className="py-4 px-4 font-bold text-gray-600 text-sm">الرياضيات</td>
-                     <td className="py-4 px-4">
-                       <span className="bg-green-100 text-green-700 font-bold px-3 py-1 rounded-lg text-xs">حاضر</span>
-                     </td>
-                     <td className="py-4 px-4 text-sm text-gray-400">-</td>
-                   </tr>
-                   <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                     <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">05 مارس 2026</td>
-                     <td className="py-4 px-4 font-bold text-gray-600 text-sm">الفيزياء</td>
-                     <td className="py-4 px-4">
-                       <span className="bg-red-100 text-red-700 font-bold px-3 py-1 rounded-lg text-xs">غائب</span>
-                     </td>
-                     <td className="py-4 px-4 text-sm font-bold text-gray-500">تم إشعار الإدارة</td>
-                   </tr>
+                   {filteredParentAttendance.length === 0 ? (
+                     <tr>
+                       <td colSpan={4} className="px-4 py-8 text-center text-sm font-bold text-gray-400">
+                         لا توجد بيانات حضور لهذا اليوم
+                       </td>
+                     </tr>
+                   ) : (
+                     filteredParentAttendance.map((row) => (
+                       <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                         <td className="py-4 px-4 font-bold text-[#2d2d5e] text-sm">{row.date}</td>
+                         <td className="py-4 px-4 font-bold text-gray-600 text-sm">{row.subject}</td>
+                         <td className="py-4 px-4">
+                           <span
+                             className={`font-bold px-3 py-1 rounded-lg text-xs ${
+                               row.status === "حاضر"
+                                 ? "bg-green-100 text-green-700"
+                                 : row.status === "غائب"
+                                   ? "bg-red-100 text-red-700"
+                                   : "bg-amber-100 text-amber-700"
+                             }`}
+                           >
+                             {row.status}
+                           </span>
+                         </td>
+                         <td className="py-4 px-4 text-sm font-bold text-gray-500">{row.notes}</td>
+                       </tr>
+                     ))
+                   )}
                  </tbody>
                </table>
              </div>
@@ -485,7 +544,7 @@ export default function ParentDashboardCoursSup() {
       default:
         return null;
     }
-  }, [currentPage, unreadCount, selectedChildId, selectedChild]);
+  })();
 
   return (
     <>
@@ -539,7 +598,7 @@ export default function ParentDashboardCoursSup() {
               </div>
 
               <nav className="flex flex-col gap-1.5 px-4 mt-4">
-                <NavBtn
+                <DashboardNavButton
                   label="الرئيسية"
                   icon={Icons.home}
                   active={currentPage === "home"}
@@ -547,7 +606,7 @@ export default function ParentDashboardCoursSup() {
                 />
                 
                 {navLinks.map((link) => (
-                  <NavBtn
+                  <DashboardNavButton
                     key={link.page}
                     label={link.label}
                     icon={link.icon}
@@ -733,6 +792,45 @@ export default function ParentDashboardCoursSup() {
           </main>
         </div>
       </div>
+
+      {selectedScheduleSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-black text-[#2d2d5e]">{selectedScheduleSession.subject}</h3>
+                <p className="text-sm font-bold text-gray-500">{selectedScheduleSession.day}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedScheduleSession(null)}
+                className="rounded-lg border border-gray-200 px-3 py-1 text-sm font-bold text-gray-500 hover:bg-gray-50"
+              >
+                إغلاق
+              </button>
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-bold text-gray-700">
+                <span className="text-gray-500">الوقت: </span>
+                {selectedScheduleSession.time}
+              </p>
+              <p className="text-sm font-bold text-gray-700">
+                <span className="text-gray-500">الأستاذ: </span>
+                {selectedScheduleSession.teacher}
+              </p>
+              <p className="text-sm font-bold text-gray-700">
+                <span className="text-gray-500">القاعة: </span>
+                {selectedScheduleSession.room}
+              </p>
+              <p className="text-sm font-bold text-gray-700">
+                <span className="text-gray-500">المجموعة: </span>
+                {selectedScheduleSession.group}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

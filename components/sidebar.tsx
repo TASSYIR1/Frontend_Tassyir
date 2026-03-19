@@ -2,12 +2,16 @@
 
 import { PageKey } from "./types";
 import { ReactNode } from "react";
+import DashboardNavButton from "@/components/DashboardNavButton";
 
 interface SidebarProps {
   currentPage: PageKey;
   setPage: (page: PageKey) => void;
   open: boolean;
   setOpen: (v: boolean) => void;
+  restrictedPages?: PageKey[];
+  roleLabel?: string;
+  roleBadge?: string;
 }
 
 const isUsersPage = (p: PageKey) =>
@@ -58,7 +62,19 @@ const userSubLinks: { label: string; page: PageKey; icon: ReactNode }[] = [
   { label: "أولياء الأمور", page: "parents",   icon: Icons.parents },
 ];
 
-export default function Sidebar({ currentPage, setPage, open, setOpen }: SidebarProps) {
+export default function Sidebar({
+  currentPage,
+  setPage,
+  open,
+  setOpen,
+  restrictedPages = [],
+  roleLabel = "تمكين",
+  roleBadge = "DASHBOARD",
+}: SidebarProps) {
+  const allowedUserSubLinks = userSubLinks.filter((sub) => !restrictedPages.includes(sub.page));
+  const allowedMainLinks = mainLinks.filter((link) => !restrictedPages.includes(link.page));
+  const allowedBottomLinks = bottomLinks.filter((link) => !restrictedPages.includes(link.page));
+
   return (
     <>
       {/* Overlay on mobile */}
@@ -67,24 +83,24 @@ export default function Sidebar({ currentPage, setPage, open, setOpen }: Sidebar
         onClick={() => setOpen(false)}
       />
 
-      <div 
-        className={`relative z-40 h-screen transition-all duration-500 ease-in-out ${open ? "w-[260px] opacity-100" : "w-0 opacity-0 pointer-events-none"} overflow-hidden shrink-0`}
+      <div
+        className={`relative z-40 h-screen transition-all duration-500 ease-in-out ${open ? "w-65 opacity-100" : "w-0 opacity-0 pointer-events-none"} overflow-hidden shrink-0`}
       >
         <aside
           dir="rtl"
-          className="w-[260px] h-full bg-gradient-to-b from-[#e01c8a] via-[#d51881] to-[#b31269] flex flex-col justify-between pt-6 pb-2 shadow-[10px_0_30px_-10px_rgba(224,28,138,0.4)] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full font-cairo"
+          className="w-65 h-full bg-linear-to-b from-[#e01c8a] via-[#d51881] to-[#b31269] flex flex-col justify-between pt-6 pb-2 shadow-[10px_0_30px_-10px_rgba(224,28,138,0.4)] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full font-cairo"
         >
           {/* ── Top: logo + close button ── */}
           <div>
             <div className="flex items-center justify-between px-6 pb-6 mb-2 border-b border-white/10">
               {/* Logo */}
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner">
+                <div className="w-10 h-10 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
                   <span className="text-white font-black text-lg">ت</span>
                 </div>
                 <div className="flex flex-col leading-tight">
-                  <span className="text-white font-black text-lg tracking-wide">تمكين</span>
-                  <span className="text-white/60 text-[10px] font-bold tracking-widest">DASHBOARD</span>
+                  <span className="text-white font-black text-lg tracking-wide">{roleLabel}</span>
+                  <span className="text-white/60 text-[10px] font-bold tracking-widest">{roleBadge}</span>
                 </div>
               </div>
 
@@ -103,7 +119,7 @@ export default function Sidebar({ currentPage, setPage, open, setOpen }: Sidebar
             {/* ── Nav links ── */}
             <nav className="flex flex-col gap-1.5 px-4 mt-4">
               {/* الرئيسية */}
-              <NavBtn
+              <DashboardNavButton
                 label="الرئيسية"
                 icon={Icons.home}
                 active={currentPage === "home"}
@@ -111,7 +127,7 @@ export default function Sidebar({ currentPage, setPage, open, setOpen }: Sidebar
               />
 
               {/* المستخدمين */}
-              <NavBtn
+              <DashboardNavButton
                 label="المستخدمين"
                 icon={Icons.users}
                 active={isUsersPage(currentPage)}
@@ -119,7 +135,7 @@ export default function Sidebar({ currentPage, setPage, open, setOpen }: Sidebar
               />
               {isUsersPage(currentPage) && (
                 <div className="mr-6 pr-4 border-r-2 border-white/10 flex flex-col gap-1 my-1 animate-in slide-in-from-right-2 duration-300">
-                  {userSubLinks.map((sub) => (
+                  {allowedUserSubLinks.map((sub) => (
                     <button
                       key={sub.page}
                       onClick={() => setPage(sub.page)}
@@ -135,8 +151,8 @@ export default function Sidebar({ currentPage, setPage, open, setOpen }: Sidebar
               )}
 
               {/* Main links */}
-              {mainLinks.map((link) => (
-                <NavBtn
+              {allowedMainLinks.map((link) => (
+                <DashboardNavButton
                   key={link.page}
                   label={link.label}
                   icon={link.icon}
@@ -150,8 +166,8 @@ export default function Sidebar({ currentPage, setPage, open, setOpen }: Sidebar
           {/* ── Bottom links ── */}
           <div className="mt-8 pt-6 border-t border-white/10 px-4">
             <nav className="flex flex-col gap-1.5">
-              {bottomLinks.map((link) => (
-                <NavBtn
+              {allowedBottomLinks.map((link) => (
+                <DashboardNavButton
                   key={link.page}
                   label={link.label}
                   icon={link.icon}
@@ -178,31 +194,3 @@ export default function Sidebar({ currentPage, setPage, open, setOpen }: Sidebar
   );
 }
 
-function NavBtn({
-  label,
-  icon,
-  active,
-  onClick,
-}: {
-  label: string;
-  icon: ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`group flex items-center justify-between px-4 py-3.5 rounded-xl text-[15px] font-black w-full text-right transition-all duration-300 ${active ? "bg-white/20 text-white shadow-md border border-white/20 backdrop-blur-sm scale-[1.02]" : "text-white/80 hover:bg-white/10 hover:text-white border border-transparent hover:translate-x-1"}`}
-    >
-      <div className="flex items-center gap-3">
-        <span className={`transition-all duration-300 ${active ? "scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" : "group-hover:scale-110"}`}>
-          {icon}
-        </span>
-        {label}
-      </div>
-      {active && (
-        <span className="w-1.5 h-6 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] animate-pulse" />
-      )}
-    </button>
-  );
-}

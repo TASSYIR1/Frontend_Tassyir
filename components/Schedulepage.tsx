@@ -1,15 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  addSharedSchedule,
+  readSharedSchedules,
+  SharedScheduleEntry,
+  ScheduleTargetType,
+} from "@/lib/sharedSchedule";
 
 interface Session {
-  id: number;
+  id: number | string;
   subject: string;
   teacher: string;
   group: string;
   room: string;
   level: string;
   time: string;
+  source?: "system" | "admin";
+  targetType?: ScheduleTargetType;
+  targetValue?: string;
 }
 
 const days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
@@ -53,15 +62,60 @@ days.forEach((day, di) => {
   });
 });
 
-function getTeacherSchedule(teacher: string) {
+function getTeacherSchedule(teacher: string, sourceSchedule: Record<string, Record<string, Session[]>>) {
   const result: Record<string, Record<string, Session[]>> = {};
   days.forEach((day) => {
     result[day] = {};
     times.forEach((time) => {
-      result[day][time] = systemSchedule[day][time].filter((s) => s.teacher === teacher);
+      result[day][time] = sourceSchedule[day][time].filter((s) => s.teacher === teacher);
     });
   });
   return result;
+}
+
+function buildEmptySchedule() {
+  const schedule: Record<string, Record<string, Session[]>> = {};
+  days.forEach((day) => {
+    schedule[day] = {};
+    times.forEach((time) => {
+      schedule[day][time] = [];
+    });
+  });
+  return schedule;
+}
+
+function mapSharedToSchedule(entries: SharedScheduleEntry[]) {
+  const mapped = buildEmptySchedule();
+  entries.forEach((entry) => {
+    if (!mapped[entry.day] || !mapped[entry.day][entry.time]) return;
+
+    mapped[entry.day][entry.time].push({
+      id: entry.id,
+      subject: entry.subject,
+      teacher: entry.teacher,
+      group: entry.group,
+      room: entry.room,
+      level: entry.level || "غير محدد",
+      time: entry.time,
+      source: "admin",
+      targetType: entry.targetType,
+      targetValue: entry.targetValue,
+    });
+  });
+  return mapped;
+}
+
+function mergeSchedules(
+  left: Record<string, Record<string, Session[]>>,
+  right: Record<string, Record<string, Session[]>>,
+) {
+  const merged = buildEmptySchedule();
+  days.forEach((day) => {
+    times.forEach((time) => {
+      merged[day][time] = [...left[day][time], ...right[day][time]];
+    });
+  });
+  return merged;
 }
 
 function CountBadge({ count }: { count: number }) {
@@ -243,8 +297,53 @@ export default function SchedulePage() {
   const [view, setView] = useState<"system" | "teacher">("system");
   const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [sharedEntries, setSharedEntries] = useState<SharedScheduleEntry[]>(() => readSharedSchedules());
+  const [newEntry, setNewEntry] = useState({
+    targetType: "group" as ScheduleTargetType,
+    targetValue: groups[0],
+    day: days[0],
+    time: times[0],
+    subject: subjects[0],
+    teacher: teachers[0],
+    group: groups[0],
+    room: rooms[0],
+    level: levels[0],
+    notes: "",
+  });
 
-  const activeSchedule = view === "system" ? systemSchedule : getTeacherSchedule(selectedTeacher);
+  useEffect(() => {
+    const syncSchedules = () => setSharedEntries(readSharedSchedules());
+    window.addEventListener("storage", syncSchedules);
+    return () => window.removeEventListener("storage", syncSchedules);
+  }, []);
+
+  const sharedSchedule = mapSharedToSchedule(sharedEntries);
+  const mergedSystemSchedule = mergeSchedules(systemSchedule, sharedSchedule);
+  const activeSchedule =
+    view === "system"
+      ? mergedSystemSchedule
+      : getTeacherSchedule(selectedTeacher, mergedSystemSchedule);
+
+  const createNewSchedule = () => {
+    if (!newEntry.targetValue.trim() || !newEntry.subject.trim()) return;
+
+    const next = addSharedSchedule({
+      targetType: newEntry.targetType,
+      targetValue: newEntry.targetValue,
+      day: newEntry.day,
+      time: newEntry.time,
+      subject: newEntry.subject,
+      teacher: newEntry.teacher,
+      group: newEntry.group,
+      room: newEntry.room,
+      level: newEntry.level,
+      notes: newEntry.notes,
+    });
+
+    setSharedEntries(next);
+    setShowCreateModal(false);
+  };
 
   return (
     <div dir="rtl" className="p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
@@ -256,6 +355,13 @@ export default function SchedulePage() {
         </div>
         
         <div className="flex items-center gap-4 bg-gray-50/80 p-2 rounded-2xl border border-gray-100">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-5 py-2.5 rounded-xl bg-[#e01c8a] hover:bg-[#c0157a] text-white text-sm font-black transition-colors shadow-sm"
+          >
+            إضافة جدولة جديدة
+          </button>
+
           <div className="flex bg-gray-200/60 rounded-xl p-1 gap-1">
             <button
               onClick={() => setView("system")}
@@ -320,7 +426,7 @@ export default function SchedulePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {times.map((time, ti) => (
+              {times.map((time) => (
                 <tr key={time} className="hover:bg-blue-50/10 transition-colors group/row">
                   <td className="p-4 text-gray-500 font-black text-center whitespace-nowrap border-l border-gray-100/60 text-xs bg-gray-50/30 group-hover/row:bg-white transition-colors">
                     {time}
@@ -378,6 +484,52 @@ export default function SchedulePage() {
         ))}
       </div>
 
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_-4px_rgba(0,0,0,0.04)] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[#2d2d5e] text-lg font-black">الجداول المضافة من الإدارة</h2>
+          <span className="text-xs font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-3 py-1">
+            {sharedEntries.length} إدخال
+          </span>
+        </div>
+
+        {sharedEntries.length === 0 ? (
+          <p className="text-sm font-bold text-gray-400">لا توجد جداول مضافة بعد.</p>
+        ) : (
+          <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0">
+            <table className="w-full text-right border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 text-xs font-black">
+                  <th className="py-3 px-4">الفئة</th>
+                  <th className="py-3 px-4">المستهدف</th>
+                  <th className="py-3 px-4">اليوم / التوقيت</th>
+                  <th className="py-3 px-4">المادة</th>
+                  <th className="py-3 px-4">الأستاذ</th>
+                  <th className="py-3 px-4">الفوج</th>
+                  <th className="py-3 px-4">القاعة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sharedEntries.map((entry) => (
+                  <tr key={entry.id} className="border-b border-gray-50 text-sm font-bold text-gray-600">
+                    <td className="py-3 px-4">
+                      <span className="bg-rose-50 text-[#e01c8a] border border-rose-100 rounded-lg px-2 py-1 text-xs font-black">
+                        {entry.targetType === "group" ? "فوج" : entry.targetType === "teacher" ? "أستاذ" : "سكرتير"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">{entry.targetValue}</td>
+                    <td className="py-3 px-4">{entry.day} - {entry.time}</td>
+                    <td className="py-3 px-4">{entry.subject}</td>
+                    <td className="py-3 px-4">{entry.teacher}</td>
+                    <td className="py-3 px-4">{entry.group}</td>
+                    <td className="py-3 px-4">{entry.room}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {selectedDay && (
         <DayPanel
           day={selectedDay}
@@ -388,6 +540,68 @@ export default function SchedulePage() {
 
       {selectedSession && !selectedDay && (
         <SessionModal session={selectedSession} onClose={() => setSelectedSession(null)} />
+      )}
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div dir="rtl" className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 border border-gray-100">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-[#2d2d5e] text-xl font-black">إضافة جدولة جديدة</h2>
+              <button onClick={() => setShowCreateModal(false)} className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">×</button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">الفئة المستهدفة</label>
+                <select value={newEntry.targetType} onChange={(e) => setNewEntry((prev) => ({ ...prev, targetType: e.target.value as ScheduleTargetType }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]">
+                  <option value="group">فوج</option>
+                  <option value="teacher">أستاذ</option>
+                  <option value="secretary">سكرتير</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">الاسم المستهدف</label>
+                <input value={newEntry.targetValue} onChange={(e) => setNewEntry((prev) => ({ ...prev, targetValue: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">اليوم</label>
+                <select value={newEntry.day} onChange={(e) => setNewEntry((prev) => ({ ...prev, day: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]">
+                  {days.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">التوقيت</label>
+                <select value={newEntry.time} onChange={(e) => setNewEntry((prev) => ({ ...prev, time: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]">
+                  {times.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">المادة</label>
+                <input value={newEntry.subject} onChange={(e) => setNewEntry((prev) => ({ ...prev, subject: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
+              </div>
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">الأستاذ</label>
+                <input value={newEntry.teacher} onChange={(e) => setNewEntry((prev) => ({ ...prev, teacher: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">الفوج</label>
+                <input value={newEntry.group} onChange={(e) => setNewEntry((prev) => ({ ...prev, group: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
+              </div>
+              <div>
+                <label className="text-xs font-black text-gray-500 block mb-2">القاعة</label>
+                <input value={newEntry.room} onChange={(e) => setNewEntry((prev) => ({ ...prev, room: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button onClick={createNewSchedule} className="flex-1 bg-[#e01c8a] hover:bg-[#c0157a] text-white font-black py-2.5 rounded-xl transition-colors">حفظ الجدولة</button>
+              <button onClick={() => setShowCreateModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-black py-2.5 rounded-xl transition-colors">إلغاء</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

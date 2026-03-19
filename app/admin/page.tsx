@@ -31,7 +31,7 @@ export default function DashboardPage() {
       case "classes":    return <ClassesPage />;
       case "subjects":   return <SubjectsPage />;
       case "schedule":   return <SchedulePage />;
-      case "attendance": return <AttendancePage />;
+      case "attendance": return <AttendancePage readOnly />;
       case "finance":    return <FinancePage />;
       case "announcements": return <AnnouncementsPage />;
       case "contact":    return <ContactPage />;
