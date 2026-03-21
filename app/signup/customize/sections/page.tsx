@@ -67,10 +67,11 @@ export default function SectionsCustomizePage() {
             <header
               className="relative h-[220px] overflow-hidden rounded-b-[28px] p-4 md:h-[275px]"
               style={{
-                background:
+                backgroundImage:
                   'linear-gradient(145deg, rgba(255,255,255,0.2) 0%, rgba(40,37,122,0.65) 45%, rgba(32,30,93,0.7) 100%), url(/assets/Rectangle%209.png)',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
               }}
             >
               <div className="flex items-center justify-between text-white/90">

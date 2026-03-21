@@ -50,10 +50,11 @@ export default function CustomizeSchoolPage() {
             <header
               className="relative h-[250px] overflow-hidden rounded-b-[28px] p-4 md:h-[300px]"
               style={{
-                background:
+                backgroundImage:
                   `linear-gradient(145deg, rgba(255,255,255,0.2) 0%, ${main}99 45%, ${accent}b3 100%), url(/assets/Rectangle%209.png)`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
               }}
             >
               <div className="flex items-center justify-between text-white/90">

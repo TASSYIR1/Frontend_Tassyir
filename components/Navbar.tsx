@@ -21,9 +21,7 @@ export default function Navbar() {
         display: "flex",
         alignItems: "center",
         direction: "rtl",
-        background: "linear-gradient(90deg, rgba(233,30,140,0.10) 0%, rgba(155,92,246,0.10) 100%)",
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+        background: "white",
         boxShadow: "0 2px 24px 0 rgba(210,0,138,0.07)",
         padding: "0 32px",
         margin: "0 auto",
@@ -59,9 +57,9 @@ export default function Navbar() {
 
           <span
             style={{
-              color: "#ffffff",
-              fontWeight: 900,
-              fontSize: 20,
+              color: "black",
+              fontWeight: 700,
+              fontSize: 15,
               fontFamily: "'Cairo', sans-serif",
               lineHeight: 1,
             }}

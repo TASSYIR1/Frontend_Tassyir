@@ -182,7 +182,7 @@ export default function Header({
 
           {/* Notifications Dropdown */}
           {showNotifs && (
-            <div className="absolute top-full -right-15 md:right-0 left-auto mt-3 w-[320px] bg-white border border-gray-100 rounded-3xl shadow-xl shadow-gray-200/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200 flex flex-col">
+            <div className="absolute top-full left-full ml-3 mt-3 w-[320px] bg-white border border-gray-100 rounded-3xl shadow-xl shadow-gray-200/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200 flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/50">
                 <span className="text-[#2d2d5e] font-black text-[15px]">الإشعارات</span>
                 {unreadCount > 0 && (
