@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import SignupLayout from '../components/SignupLayout';
+import { schoolService } from '@/lib/api/school.service';
+import type { SchoolLevel, SchoolType } from '@/lib/api/types';
 
 type FieldName = 'schoolName' | 'email' | 'phone' | 'password' | 'confirmPassword' | 'address';
 type FormErrors = Partial<Record<FieldName, string>>;
@@ -59,6 +61,9 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [popupErrors, setPopupErrors]             = useState<string[]>([]);
   const [submissionState, setSubmissionState]     = useState<'form' | 'first' | 'final'>('form');
+  const [requestId, setRequestId]                 = useState<string>('REQ-PENDING');
+  const [submitting, setSubmitting]               = useState(false);
+  const [submitError, setSubmitError]             = useState<string | null>(null);
 
   const requiredMessages: Record<FieldName, string> = {
     schoolName: 'هذا الحقل مطلوب',
@@ -132,8 +137,47 @@ export default function RegisterPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
+    setSubmitError(null);
     setSubmissionState('first');
+  };
+
+  const mapSchoolType = (): SchoolType => {
+    return formData.schoolType === 'regularSchool' ? 'NORMALE' : 'COURS_SUPPLEMENTAIRES';
+  };
+
+  const mapSchoolLevel = (): SchoolLevel => {
+    if (formData.educationStages.includes('primary')) return 'PRIMAIRE';
+    if (formData.educationStages.includes('middle')) return 'MOYENNE';
+    if (formData.educationStages.includes('secondary')) return 'SECONDAIRE';
+    return 'MOYENNE';
+  };
+
+  const submitSchoolRequest = async () => {
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+      const schoolType = mapSchoolType();
+      const school = await schoolService.createSchool({
+        name: formData.schoolName,
+        type: schoolType,
+        schoolLevel: schoolType === 'NORMALE' ? mapSchoolLevel() : undefined,
+        adminFullName: formData.schoolName,
+        adminEmail: formData.email,
+      });
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('tassyir_created_school_slug', school.slug);
+        window.localStorage.setItem('tassyir_created_school_id', school.id);
+      }
+
+      setRequestId(`REQ-${school.id.slice(0, 8).toUpperCase()}`);
+      setSubmissionState('final');
+    } catch (error) {
+      console.error('School creation failed:', error);
+      setSubmitError('تعذر إرسال طلب التسجيل، يرجى إعادة المحاولة');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const steps = [
@@ -159,9 +203,10 @@ export default function RegisterPage() {
             <button 
               type="button"
               className="bg-[#D2008A] text-white font-semibold py-2 px-12 md:px-16 rounded shadow-sm hover:opacity-90 transition-opacity text-sm"
-              onClick={() => setSubmissionState('final')}
+              onClick={submitSchoolRequest}
+              disabled={submitting}
             >
-              تسجيل
+              {submitting ? 'جاري الإرسال...' : 'تسجيل'}
             </button>
             <button 
               type="button"
@@ -171,6 +216,10 @@ export default function RegisterPage() {
               العودة
             </button>
           </div>
+
+          {submitError && (
+            <p className="text-red-600 font-bold text-sm mb-4">{submitError}</p>
+          )}
         </div>
       </SignupLayout>
     );
@@ -185,7 +234,7 @@ export default function RegisterPage() {
               تم استلام طلبكم بنجاح
             </h2>
             <h3 className="text-[#1F1B3D] text-[18px] sm:text-[22px] md:text-[24px] font-bold mb-6">
-              رقم الطلب: REQ-2026-001
+              رقم الطلب: {requestId}
             </h3>
             <p className="text-[#1F1B3D] text-[16px] sm:text-[20px] md:text-[22px] font-bold leading-relaxed">
               سنتواصل معكم قريباً على الرقم المسجل لتأكيد الحساب وتفعيله.

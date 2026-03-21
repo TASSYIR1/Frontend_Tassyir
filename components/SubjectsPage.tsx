@@ -1,6 +1,8 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { academicService } from "@/lib/api/academic.service";
+import type { RecordMap } from "@/lib/api/types";
 
 const Icons = {
   Plus: (
@@ -48,14 +50,68 @@ const initialSubjects: Subject[] = [
   { id: "S6", name: "اللغة الفرنسية", code: "FRE106", teacher: "أ. سالم عبد الرحمان", classesCount: 5, hoursPerWeek: 4, color: "from-rose-500 to-pink-400" },
 ];
 
+const toText = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim().length > 0 ? value : fallback;
+
+const toNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const mapSubjectFromApi = (row: RecordMap, index: number): Subject => {
+  const palette = [
+    "from-blue-500 to-cyan-400",
+    "from-purple-500 to-indigo-400",
+    "from-[#e01c8a] to-[#ff42a5]",
+    "from-emerald-500 to-teal-400",
+    "from-amber-500 to-orange-400",
+    "from-rose-500 to-pink-400",
+  ];
+
+  return {
+    id: toText(row.id, `S${Date.now()}-${index}`),
+    name: toText(row.name, "مادة"),
+    code: toText(row.code, `SUB-${index + 1}`),
+    teacher: toText(row.teacher_name, toText(row.teacherName, "غير محدد")),
+    classesCount: toNumber(row.classes_count, 0),
+    hoursPerWeek: toNumber(row.hours_per_week, 0),
+    color: toText(row.color, palette[index % palette.length]),
+  };
+};
+
+const toSubjectApiPayload = (subject: Omit<Subject, "id"> | Subject): RecordMap => ({
+  name: subject.name,
+  code: subject.code,
+  teacherName: subject.teacher,
+  classesCount: subject.classesCount,
+  hoursPerWeek: subject.hoursPerWeek,
+  color: subject.color,
+});
+
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>(initialSubjects);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Form State
   const [form, setForm] = useState({ name: "", code: "", teacher: "", classesCount: 1, hoursPerWeek: 1, color: "from-blue-500 to-cyan-400" });
+
+  useEffect(() => {
+    const loadSubjects = async () => {
+      try {
+        const rows = await academicService.getSubjects();
+        setSubjects(rows.map((row, index) => mapSubjectFromApi(row, index)));
+      } catch {
+        setSubjects(initialSubjects);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadSubjects();
+  }, []);
 
   const filtered = subjects.filter(
     (s) =>
@@ -64,9 +120,13 @@ export default function SubjectsPage() {
       s.code.includes(search)
   );
 
-  const handleDelete = (id: string) => {
-    if (confirm("هل أنت متأكد من حذف هذه المادة؟")) {
+  const handleDelete = async (id: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذه المادة؟")) return;
+    try {
+      await academicService.deleteSubject(id);
       setSubjects((prev) => prev.filter((s) => s.id !== id));
+    } catch {
+      alert("تعذر حذف المادة من الخادم");
     }
   };
 
@@ -82,19 +142,28 @@ export default function SubjectsPage() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim() || !form.code.trim()) return alert("الرجاء إدخال اسم ورمز المادة");
 
     if (editingId) {
-      setSubjects((prev) =>
-        prev.map((s) => (s.id === editingId ? { ...s, ...form } : s))
-      );
+      try {
+        await academicService.updateSubject(editingId, toSubjectApiPayload({ id: editingId, ...form }));
+        setSubjects((prev) =>
+          prev.map((s) => (s.id === editingId ? { ...s, ...form } : s))
+        );
+      } catch {
+        alert("تعذر تعديل المادة على الخادم");
+        return;
+      }
     } else {
-      const newD: Subject = {
-        id: "S${Date.now()}",
-        ...form,
-      };
-      setSubjects([newD, ...subjects]);
+      try {
+        const created = await academicService.createSubject(toSubjectApiPayload({ ...form, id: "" }));
+        const mapped = mapSubjectFromApi(created, 0);
+        setSubjects((prev) => [mapped, ...prev]);
+      } catch {
+        alert("تعذر إضافة المادة على الخادم");
+        return;
+      }
     }
     setShowModal(false);
   };
@@ -140,6 +209,11 @@ export default function SubjectsPage() {
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading && (
+          <div className="col-span-full py-12 text-center">
+            <p className="text-[#2d2d5e] font-black">جاري تحميل المواد من الخادم...</p>
+          </div>
+        )}
         {filtered.map((subject) => (
           <div
             key={subject.id}

@@ -9,15 +9,18 @@ import UsersPage from "@/components/UsersPage";
 import ClassesPage from "@/components/Classespage";
 import SchedulePage from "@/components/Schedulepage";
 import AttendancePage from "@/components/Attendancepage";
-import FinancePage from "@/components/Financepage";import AnnouncementsPage from "@/components/AnnouncementsPage";
-import SubjectsPage from "@/components/SubjectsPage";import {
+import FinancePage from "@/components/Financepage";
+import AnnouncementsPage from "@/components/AnnouncementsPage";
+import SubjectsPage from "@/components/SubjectsPage";
+import {
   ContactPage,
   FilesPage,
   SettingsPage,
   AuditPage,
 } from "@/components/Otherpages";
+import { AuthGuard } from "@/lib/auth/AuthGuard";
 
-export default function DashboardPage() {
+function AdminDashboardContent() {
   const [currentPage, setCurrentPage] = useState<PageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -72,3 +75,11 @@ export default function DashboardPage() {
     </>
   );
 }
+
+export default function DashboardPage() {
+  return (
+    <AuthGuard allowedRoles={['ADMIN']}>
+      <AdminDashboardContent />
+    </AuthGuard>
+  );
+}

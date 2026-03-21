@@ -9,8 +9,9 @@ import Schools from "./components/Schools";
 import Statistics from "./components/Statistics";
 import Logs from "./components/Logs";
 import Settings from "./components/Settings";
+import { AuthGuard } from "@/lib/auth/AuthGuard";
 
-export default function TayssirDashboardPage() {
+function TayssirDashboardContent() {
   const [currentPage, setCurrentPage] = useState<TayssirPageKey>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -54,3 +55,12 @@ export default function TayssirDashboardPage() {
     </>
   );
 }
+
+export default function TayssirDashboardPage() {
+  return (
+    <AuthGuard allowedRoles={['SUPER_ADMIN']}>
+      <TayssirDashboardContent />
+    </AuthGuard>
+  );
+}
+

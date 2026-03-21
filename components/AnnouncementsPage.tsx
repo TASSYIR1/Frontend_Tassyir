@@ -1,6 +1,8 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { communicationService } from "@/lib/api/communication.service";
+import type { RecordMap } from "@/lib/api/types";
 
 const Icons = {
   Plus: (
@@ -78,14 +80,52 @@ const initialAnnouncements: Announcement[] = [
   },
 ];
 
+const toText = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim().length > 0 ? value : fallback;
+
+const mapAnnouncementFromApi = (row: RecordMap, index: number): Announcement => ({
+  id: toText(row.id, `A-${index}`),
+  title: toText(row.title, "إعلان"),
+  preview: toText(row.content, toText(row.preview, "")),
+  date: toText(
+    row.createdAt,
+    typeof row.date === "string" ? row.date : new Date().toLocaleDateString("en-GB"),
+  ),
+  target: toText(row.scope, toText(row.target, "الجميع")),
+  pinned: Boolean(row.pinned),
+});
+
+const toAnnouncementPayload = (announcement: { title: string; preview: string; target: string; pinned: boolean }): RecordMap => ({
+  title: announcement.title,
+  content: announcement.preview,
+  scope: announcement.target || "ALL",
+  pinned: announcement.pinned,
+});
+
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>(initialAnnouncements);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Form State
   const [form, setForm] = useState({ title: "", preview: "", target: "", pinned: false });
+
+  useEffect(() => {
+    const loadAnnouncements = async () => {
+      try {
+        const rows = await communicationService.getAnnouncements();
+        setAnnouncements(rows.map((row, index) => mapAnnouncementFromApi(row, index)));
+      } catch {
+        setAnnouncements(initialAnnouncements);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadAnnouncements();
+  }, []);
 
   const filtered = announcements.filter(
     (a) =>
@@ -94,9 +134,13 @@ export default function AnnouncementsPage() {
       a.target.includes(search)
   );
 
-  const handleDelete = (id: string) => {
-    if (confirm("هل أنت متأكد من حذف هذا الإعلان؟")) {
+  const handleDelete = async (id: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذا الإعلان؟")) return;
+    try {
+      await communicationService.deleteAnnouncement(id);
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    } catch {
+      alert("تعذر حذف الإعلان من الخادم");
     }
   };
 
@@ -112,28 +156,55 @@ export default function AnnouncementsPage() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title.trim() || !form.preview.trim()) return alert("الرجاء إدخال العنوان والمحتوى");
 
     if (editingId) {
-      setAnnouncements((prev) =>
-        prev.map((a) => (a.id === editingId ? { ...a, ...form } : a))
-      );
+      try {
+        await communicationService.deleteAnnouncement(editingId);
+        await communicationService.createAnnouncement(toAnnouncementPayload(form));
+      } catch {
+        alert("تعذر تعديل الإعلان على الخادم");
+        return;
+      }
     } else {
-      const newD: Announcement = {
-        id: `A${Date.now()}`,
-        ...form,
-        date: new Date().toLocaleDateString("en-GB"),
-      };
-      setAnnouncements([newD, ...announcements]);
+      try {
+        await communicationService.createAnnouncement(toAnnouncementPayload(form));
+      } catch {
+        alert("تعذر إضافة الإعلان على الخادم");
+        return;
+      }
+    }
+    try {
+      const rows = await communicationService.getAnnouncements();
+      setAnnouncements(rows.map((row, index) => mapAnnouncementFromApi(row, index)));
+    } catch {
+      // keep current state if refresh fails
     }
     setShowModal(false);
   };
 
-  const togglePin = (id: string) => {
+  const togglePin = async (id: string) => {
     setAnnouncements((prev) =>
       prev.map((a) => (a.id === id ? { ...a, pinned: !a.pinned } : a)).sort((a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1))
     );
+
+    const current = announcements.find((item) => item.id === id);
+    if (!current) return;
+
+    try {
+      await communicationService.deleteAnnouncement(id);
+      await communicationService.createAnnouncement(
+        toAnnouncementPayload({
+          title: current.title,
+          preview: current.preview,
+          target: current.target,
+          pinned: !current.pinned,
+        }),
+      );
+    } catch {
+      // optimistic UI only if backend pin persistence fails
+    }
   };
 
   return (
@@ -177,6 +248,11 @@ export default function AnnouncementsPage() {
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading && (
+          <div className="col-span-full py-12 text-center">
+            <p className="text-[#2d2d5e] font-black">جاري تحميل الإعلانات من الخادم...</p>
+          </div>
+        )}
         {filtered.map((item) => (
           <div
             key={item.id}

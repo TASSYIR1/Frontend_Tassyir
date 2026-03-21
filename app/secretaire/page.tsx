@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 import { PageKey } from "@/components/types";
@@ -14,13 +13,13 @@ import FinancePage from "@/components/Financepage";
 import AnnouncementsPage from "@/components/AnnouncementsPage";
 import SubjectsPage from "@/components/SubjectsPage";
 import { ContactPage, FilesPage } from "@/components/Otherpages";
+import { AuthGuard } from "@/lib/auth/AuthGuard";
 
 const SECRETARY_RESTRICTED_PAGES: PageKey[] = ["admins", "audit", "settings"];
 
 const isSecretaryAllowedPage = (page: PageKey) => !SECRETARY_RESTRICTED_PAGES.includes(page);
 
-export default function SecretaryDashboardPage() {
-  const router = useRouter();
+function SecretaryDashboardContent() {
   const [currentPage, setCurrentPage] = useState<PageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -72,10 +71,6 @@ export default function SecretaryDashboardPage() {
     }
   };
 
-  const handleLogout = () => {
-    router.push("/");
-  };
-
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap'); * { font-family: 'Cairo', sans-serif; }`}</style>
@@ -108,3 +103,12 @@ export default function SecretaryDashboardPage() {
     </>
   );
 }
+
+export default function SecretaryDashboardPage() {
+  return (
+    <AuthGuard allowedRoles={['SECRETAIRE']}>
+      <SecretaryDashboardContent />
+    </AuthGuard>
+  );
+}
+

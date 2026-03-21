@@ -4,6 +4,11 @@ import { useState, useRef, useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { readSharedSchedules, SharedScheduleEntry } from "@/lib/sharedSchedule";
 import DashboardNavButton from "@/components/DashboardNavButton";
+import { AuthGuard } from "@/lib/auth/AuthGuard";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { scheduleService } from "@/lib/api/schedule.service";
+import { communicationService } from "@/lib/api/communication.service";
+import type { RecordMap } from "@/lib/api/types";
 
 // --- Types ---
 type TeacherPageKey =
@@ -100,8 +105,9 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 
 // --- Main Page ---
 
-export default function TeacherDashboard() {
+function TeacherDashboardContent() {
   const router = useRouter();
+  const { logout, user } = useAuth();
   const [currentPage, setCurrentPage] = useState<TeacherPageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [toastMessage, setToastMessage] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
@@ -111,11 +117,15 @@ export default function TeacherDashboard() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     showToast("جاري تسجيل الخروج...", "info");
-    setTimeout(() => {
-      router.push("/");
-    }, 1500);
+    try {
+      await logout();
+    } finally {
+      setTimeout(() => {
+        router.push("/");
+      }, 600);
+    }
   };
 
   // Header Handlers
@@ -150,11 +160,17 @@ export default function TeacherDashboard() {
   const unreadCount = notifications.filter(n => !n.read).length;
   const markAllAsRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
 
-  const teacherName = "محمد أحمد";
+  const teacherName = user?.fullName ?? "الأستاذ";
   const [sharedSchedules, setSharedSchedules] = useState<SharedScheduleEntry[]>(() => readSharedSchedules());
   const [attendanceDate, setAttendanceDate] = useState("2026-03-19");
   const [attendanceGroup, setAttendanceGroup] = useState("5A");
   const [selectedScheduleSession, setSelectedScheduleSession] = useState<ScheduleSession | null>(null);
+  const [teacherApiSchedules, setTeacherApiSchedules] = useState<ScheduleSession[]>([]);
+  const [teacherAnnouncements, setTeacherAnnouncements] = useState<RecordMap[]>([]);
+  const [teacherInbox, setTeacherInbox] = useState<RecordMap[]>([]);
+  const [announcementBody, setAnnouncementBody] = useState("");
+  const [messageInput, setMessageInput] = useState("");
+  const [messageTargetRole, setMessageTargetRole] = useState<"SECRETAIRE" | "ADMIN">("SECRETAIRE");
   const [attendanceRows, setAttendanceRows] = useState([
     { id: 1, name: "أحمد بن محمد", group: "5A", date: "2026-03-19", status: "present" as "present" | "absent" | "late" },
     { id: 2, name: "سارة محمود", group: "5A", date: "2026-03-19", status: "absent" as "present" | "absent" | "late" },
@@ -169,6 +185,39 @@ export default function TeacherDashboard() {
     return () => window.removeEventListener("storage", syncSharedSchedules);
   }, []);
 
+  const toText = (value: unknown, fallback = "") =>
+    typeof value === "string" && value.trim().length > 0 ? value : fallback;
+
+  useEffect(() => {
+    const loadTeacherData = async () => {
+      try {
+        const [scheduleRows, announcementRows, inboxRows] = await Promise.all([
+          scheduleService.getMySchedule(),
+          communicationService.getAnnouncements(),
+          communicationService.getInbox(),
+        ]);
+
+        const mappedSchedules: ScheduleSession[] = scheduleRows.map((row, index) => ({
+          id: toText(row.id, `T-${index}`),
+          day: toText(row.day, toText(row.jour, "الإثنين")),
+          time: toText(row.time, toText(row.startTime, "--:--")),
+          subject: toText(row.subject, toText(row.subjectName, "مادة")),
+          group: toText(row.group, toText(row.groupName, "فوج")),
+          room: toText(row.room, toText(row.roomName, "قاعة")),
+          teacher: teacherName,
+        }));
+
+        setTeacherApiSchedules(mappedSchedules);
+        setTeacherAnnouncements(announcementRows);
+        setTeacherInbox(inboxRows);
+      } catch {
+        showToast("تعذر تحميل بيانات الأستاذ", "error");
+      }
+    };
+
+    void loadTeacherData();
+  }, [teacherName]);
+
   const teacherScheduleRows = sharedSchedules
     .filter((item) => item.targetType === "teacher" && item.targetValue === teacherName)
     .map((item) => ({
@@ -179,12 +228,16 @@ export default function TeacherDashboard() {
       room: item.room,
     }));
 
-  const baseTeacherScheduleRows = [
-    { day: "الإثنين", time: "08:30 ص", subject: "الرياضيات", group: "5A", room: "203" },
-    { day: "الثلاثاء", time: "10:15 ص", subject: "الفيزياء", group: "4B", room: "107" },
+  const mergedTeacherScheduleRows = [
+    ...teacherApiSchedules.map((row) => ({
+      day: row.day,
+      time: row.time,
+      subject: row.subject,
+      group: row.group,
+      room: row.room,
+    })),
+    ...teacherScheduleRows,
   ];
-
-  const mergedTeacherScheduleRows = [...baseTeacherScheduleRows, ...teacherScheduleRows];
 
   const dayOrder = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
   const teacherScheduleSessions: ScheduleSession[] = mergedTeacherScheduleRows.map((row, index) => ({
@@ -201,6 +254,56 @@ export default function TeacherDashboard() {
     acc[day] = teacherScheduleSessions.filter((session) => session.day === day);
     return acc;
   }, {});
+
+  const upcomingSessions = teacherScheduleSessions.slice(0, 2);
+
+  const publishAnnouncement = async () => {
+    if (!announcementBody.trim()) {
+      showToast("اكتب محتوى الإعلان أولاً", "info");
+      return;
+    }
+    try {
+      await communicationService.createAnnouncement({
+        title: "إعلان من الأستاذ",
+        content: announcementBody.trim(),
+        scope: "CLASS",
+      });
+      setAnnouncementBody("");
+      showToast("تم نشر الإعلان بنجاح", "success");
+      const rows = await communicationService.getAnnouncements();
+      setTeacherAnnouncements(rows);
+    } catch {
+      showToast("تعذر نشر الإعلان", "error");
+    }
+  };
+
+  const sendTeacherMessage = async () => {
+    if (!messageInput.trim()) {
+      showToast("اكتب الرسالة أولاً", "info");
+      return;
+    }
+    const target = teacherInbox.find((row) =>
+      toText(row.senderRole, "").toUpperCase() === messageTargetRole ||
+      toText(row.receiverRole, "").toUpperCase() === messageTargetRole,
+    );
+    const targetId = toText(target?.senderId, toText(target?.fromUserId, ""));
+    if (!targetId) {
+      showToast("لا يوجد مستقبل متاح في هذه المحادثة بعد", "error");
+      return;
+    }
+    try {
+      await communicationService.sendMessage({
+        toUserId: targetId,
+        content: messageInput.trim(),
+      });
+      setMessageInput("");
+      showToast("تم إرسال الرسالة", "success");
+      const inboxRows = await communicationService.getInbox();
+      setTeacherInbox(inboxRows);
+    } catch {
+      showToast("تعذر إرسال الرسالة", "error");
+    }
+  };
 
   const visibleAttendanceRows = attendanceRows.filter(
     (student) => student.group === attendanceGroup && student.date === attendanceDate,
@@ -224,51 +327,46 @@ export default function TeacherDashboard() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard title="حصص اليوم" value="4" subtitle="٢ صباحي، ٢ مسائي" onClick={() => setCurrentPage('schedule')} />
-              <StatCard title="الحصص القادمة" value="3" subtitle="خلال ٢٤ ساعة القادمة" onClick={() => setCurrentPage('schedule')} />
-              <StatCard title="الإعلانات الأسبوعية" value="5" subtitle="٢ جديد هذا الأسبوع" onClick={() => setCurrentPage('announcements')} />
+              <StatCard title="حصص اليوم" value={String(upcomingSessions.length)} subtitle="حسب الجدول الحالي" onClick={() => setCurrentPage('schedule')} />
+              <StatCard title="الحصص القادمة" value={String(teacherScheduleSessions.length)} subtitle="من الجدول الأسبوعي" onClick={() => setCurrentPage('schedule')} />
+              <StatCard title="الإعلانات الأسبوعية" value={String(teacherAnnouncements.length)} subtitle="من النظام" onClick={() => setCurrentPage('announcements')} />
               <StatCard title="الإشعارات الحديثة" value="7" subtitle={`${unreadCount} غير مقروءة`} onClick={() => setShowNotifs(true)} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <SectionCard title="الحصص القادمة">
                 <div className="flex flex-col gap-3">
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
-                    <div>
-                      <h4 className="font-black text-[#2d2d5e] text-sm">الرياضيات</h4>
-                      <p className="text-xs text-gray-500 font-bold mt-1">الفصل 5A • القاعة 203</p>
-                    </div>
-                    <div className="bg-[#e01c8a]/10 text-[#e01c8a] px-3 py-1.5 rounded-xl text-sm font-black text-left">
-                      08:30 ص
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
-                    <div>
-                      <h4 className="font-black text-[#2d2d5e] text-sm">الفيزياء</h4>
-                      <p className="text-xs text-gray-500 font-bold mt-1">الفصل 4B • القاعة 107</p>
-                    </div>
-                    <div className="bg-[#e01c8a]/10 text-[#e01c8a] px-3 py-1.5 rounded-xl text-sm font-black text-left">
-                      10:15 ص
-                    </div>
-                  </div>
+                  {upcomingSessions.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                      لا توجد حصص قادمة حالياً
+                    </p>
+                  ) : (
+                    upcomingSessions.map((session) => (
+                      <div key={session.id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
+                        <div>
+                          <h4 className="font-black text-[#2d2d5e] text-sm">{session.subject}</h4>
+                          <p className="text-xs text-gray-500 font-bold mt-1">{session.group} • {session.room}</p>
+                        </div>
+                        <div className="bg-[#e01c8a]/10 text-[#e01c8a] px-3 py-1.5 rounded-xl text-sm font-black text-left">
+                          {session.time}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </SectionCard>
 
               <SectionCard title="آخر الإعلانات والإشعارات">
                 <div className="flex flex-col gap-3">
-                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 hover:bg-rose-100/50 transition-colors">
-                    <div className="w-2 h-2 mt-1.5 bg-[#e01c8a] rounded-full shadow-[0_0_8px_rgba(224,28,138,0.5)]"></div>
-                    <div>
-                      <h4 className="font-black text-rose-900 text-sm">تذكير</h4>
-                      <p className="text-xs text-rose-700 font-bold mt-1">اجتماع تربوي يوم الخميس الساعة ٣ عصراً.</p>
+                  {(teacherAnnouncements.length === 0 ? [{ title: "لا توجد إعلانات", content: "" }] : teacherAnnouncements.slice(0, 2)).map((row, index) => (
+                    <div key={`t-ann-${index}`} className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 hover:bg-rose-100/50 transition-colors">
+                      <div className="w-2 h-2 mt-1.5 bg-[#e01c8a] rounded-full shadow-[0_0_8px_rgba(224,28,138,0.5)]"></div>
+                      <div>
+                        <h4 className="font-black text-rose-900 text-sm">{toText(row.title, "إعلان")}</h4>
+                        <p className="text-xs text-rose-700 font-bold mt-1">{toText(row.content, "")}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-start gap-4 hover:bg-blue-100/50 transition-colors">
-                    <div className="w-2 h-2 mt-1.5 bg-blue-500 rounded-full"></div>
-                    <div>
-                      <h4 className="font-black text-blue-900 text-sm">مستندات جديدة</h4>
-                      <p className="text-xs text-blue-700 font-bold mt-1">تم توفير ملفات داعمة للفصل 5A.</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </SectionCard>
             </div>
@@ -506,13 +604,15 @@ export default function TeacherDashboard() {
               <div>
                 <label className="block text-sm font-black text-[#2d2d5e] mb-2">محتوى الإعلان:</label>
                 <textarea 
+                  value={announcementBody}
+                  onChange={(e) => setAnnouncementBody(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#e01c8a]/20 font-bold text-sm text-gray-700 min-h-[120px]"
                   placeholder="اكتب رسالتك للإعلان للطلاب أو المجموعات..."
                 ></textarea>
               </div>
 
               <div className="flex justify-end">
-                <button onClick={() => showToast("تم نشر الإعلان بنجاح...", "success")} className="bg-[#e01c8a] hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-black text-sm shadow-md shadow-rose-200 transition-colors">
+                <button onClick={publishAnnouncement} className="bg-[#e01c8a] hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-black text-sm shadow-md shadow-rose-200 transition-colors">
                   نشر الإعلان
                 </button>
               </div>
@@ -524,39 +624,44 @@ export default function TeacherDashboard() {
         return (
           <SectionCard title="المراسلة الداخلية (الإدارة والسكرتارية)">
             <div className="flex bg-gray-100 p-1 rounded-xl mb-4 w-fit">
-               <button onClick={() => showToast("تبديل إلى المراسلة مع السكرتارية...", "info")} className="px-6 py-2 text-sm font-bold bg-white text-[#e01c8a] rounded-lg shadow-sm">تواصل مع السكرتارية</button>
-               <button onClick={() => showToast("تبديل إلى المراسلة مع الإدارة...", "info")} className="px-6 py-2 text-sm font-bold text-gray-500 hover:text-gray-700">تواصل مع الإدارة</button>
+               <button onClick={() => setMessageTargetRole("SECRETAIRE")} className={`px-6 py-2 text-sm font-bold rounded-lg shadow-sm ${messageTargetRole === "SECRETAIRE" ? "bg-white text-[#e01c8a]" : "text-gray-500 hover:text-gray-700"}`}>تواصل مع السكرتارية</button>
+               <button onClick={() => setMessageTargetRole("ADMIN")} className={`px-6 py-2 text-sm font-bold rounded-lg ${messageTargetRole === "ADMIN" ? "bg-white text-[#e01c8a]" : "text-gray-500 hover:text-gray-700"}`}>تواصل مع الإدارة</button>
             </div>
             
             <div className="flex flex-col gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 h-[400px] overflow-y-auto mb-4">
-              <div className="flex justify-start">
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-tr-sm p-4 max-w-[80%] shadow-sm">
-                  <h4 className="font-black text-xs text-blue-600 mb-1">السكرتارية</h4>
-                  <p className="text-sm font-bold text-gray-700 leading-relaxed">
-                    أستاذي، هل يمكنك تأكيد القاعة التي ستشغلها لدرس الدعم يوم الأحد؟
-                  </p>
-                  <span className="block text-left mt-2 text-[10px] text-gray-400 font-bold">10:00 ص</span>
-                </div>
-              </div>
-              
-              <div className="flex justify-end">
-                <div className="bg-rose-50 border border-rose-100 rounded-2xl rounded-tl-sm p-4 max-w-[80%] shadow-sm">
-                  <h4 className="font-black text-xs text-[#e01c8a] mb-1">أنت</h4>
-                  <p className="text-sm font-bold text-rose-900 leading-relaxed">
-                    نعم، تم حجز القاعة 107 كما هو متفق عليه.
-                  </p>
-                  <span className="block text-left mt-2 text-[10px] text-rose-300 font-bold">10:15 ص</span>
-                </div>
-              </div>
+              {teacherInbox.length === 0 ? (
+                <div className="text-center text-sm font-bold text-gray-400 py-6">لا توجد رسائل حالياً</div>
+              ) : (
+                teacherInbox.map((row, index) => {
+                  const mine = Boolean(row.mine) || toText(row.direction, "").toUpperCase() === "OUT";
+                  return (
+                    <div key={`inbox-${index}`} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div className={`${mine ? "bg-rose-50 border border-rose-100 rounded-tl-sm" : "bg-white border border-gray-200 rounded-tr-sm"} rounded-2xl p-4 max-w-[80%] shadow-sm`}>
+                        <h4 className={`font-black text-xs mb-1 ${mine ? "text-[#e01c8a]" : "text-blue-600"}`}>
+                          {mine ? "أنت" : toText(row.senderRole, "الطرف الآخر")}
+                        </h4>
+                        <p className={`text-sm font-bold leading-relaxed ${mine ? "text-rose-900" : "text-gray-700"}`}>
+                          {toText(row.message, toText(row.content, ""))}
+                        </p>
+                        <span className={`block text-left mt-2 text-[10px] font-bold ${mine ? "text-rose-300" : "text-gray-400"}`}>
+                          {toText(row.createdAt, "")}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div className="flex gap-2">
               <input 
                 type="text" 
                 placeholder="اكتب رسالتك..."
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
                 className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#e01c8a]/20 font-bold text-sm text-gray-700"
               />
-              <button onClick={() => showToast("جاري إرسال الرسالة...", "success")} className="bg-[#e01c8a] hover:bg-rose-600 text-white w-12 rounded-xl flex justify-center items-center shadow-md shadow-rose-200 transition-colors">
+              <button onClick={sendTeacherMessage} className="bg-[#e01c8a] hover:bg-rose-600 text-white w-12 rounded-xl flex justify-center items-center shadow-md shadow-rose-200 transition-colors">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rotate-180 -ml-1"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
               </button>
             </div>
@@ -859,5 +964,13 @@ export default function TeacherDashboard() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function TeacherDashboard() {
+  return (
+    <AuthGuard allowedRoles={['ENSEIGNANT']}>
+      <TeacherDashboardContent />
+    </AuthGuard>
   );
 }

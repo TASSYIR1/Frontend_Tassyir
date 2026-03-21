@@ -1,31 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  addSharedSchedule,
-  readSharedSchedules,
-  SharedScheduleEntry,
-  ScheduleTargetType,
-} from "@/lib/sharedSchedule";
+import { scheduleService } from "@/lib/api/schedule.service";
+import { academicService } from "@/lib/api/academic.service";
+import type { RecordMap } from "@/lib/api/types";
 
 interface Session {
   id: number | string;
+  day: string;
   subject: string;
   teacher: string;
   group: string;
   room: string;
   level: string;
   time: string;
-  source?: "system" | "admin";
-  targetType?: ScheduleTargetType;
-  targetValue?: string;
+  source?: "backend";
+  scopeType?: "GROUP" | "CLASS";
+  scopeId?: string;
 }
 
 const days = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
 const times = ["8:00 - 9:00", "9:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "14:00 - 15:00", "15:00 - 16:00"];
-const teachers = ["أ. بن علي", "أ. حمداني", "أ. مزهود", "أ. بوزيد", "أ. رمضان"];
 const subjects = ["رياضيات", "فيزياء", "عربية", "فرنسية", "تاريخ", "علوم", "انجليزية"];
-const groups = ["AB12", "CD14", "EF16", "GH18", "IJ20"];
 const levels = ["أولى ثانوي", "ثانية ثانوي", "ثالثة ثانوي"];
 const rooms = ["31", "32", "33", "34", "35", "36", "37"];
 
@@ -39,39 +35,84 @@ const subjectColors: Record<string, string> = {
   انجليزية: "bg-yellow-50/80 text-yellow-700 border-yellow-100",
 };
 
-// Build deterministic system schedule
-let sid = 0;
-const systemSchedule: Record<string, Record<string, Session[]>> = {};
-days.forEach((day, di) => {
-  systemSchedule[day] = {};
-  times.forEach((time, ti) => {
-    const count = (di * 7 + ti * 3) % 4;
-    const sessions: Session[] = [];
-    for (let s = 0; s < count; s++) {
-      sessions.push({
-        id: ++sid,
-        subject:  subjects[(di + ti + s * 3) % subjects.length],
-        teacher:  teachers[(di + ti + s) % teachers.length],
-        group:    groups[(ti + s + di) % groups.length],
-        room:     rooms[(di * 2 + ti + s) % rooms.length],
-        level:    levels[(di + s) % levels.length],
-        time,
-      });
-    }
-    systemSchedule[day][time] = sessions;
-  });
-});
+const toText = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim().length > 0 ? value : fallback;
 
-function getTeacherSchedule(teacher: string, sourceSchedule: Record<string, Record<string, Session[]>>) {
-  const result: Record<string, Record<string, Session[]>> = {};
-  days.forEach((day) => {
-    result[day] = {};
-    times.forEach((time) => {
-      result[day][time] = sourceSchedule[day][time].filter((s) => s.teacher === teacher);
-    });
-  });
-  return result;
-}
+const dayToArabic: Record<string, string> = {
+  SATURDAY: "السبت",
+  SUNDAY: "الأحد",
+  MONDAY: "الإثنين",
+  TUESDAY: "الثلاثاء",
+  WEDNESDAY: "الأربعاء",
+  THURSDAY: "الخميس",
+};
+
+const dayNumberToArabic: Record<number, string> = {
+  1: "الإثنين",
+  2: "الثلاثاء",
+  3: "الأربعاء",
+  4: "الخميس",
+  5: "الجمعة",
+  6: "السبت",
+  7: "الأحد",
+};
+
+const dayArabicToNumber: Record<string, number> = {
+  "الإثنين": 1,
+  "الثلاثاء": 2,
+  "الأربعاء": 3,
+  "الخميس": 4,
+  "الجمعة": 5,
+  "السبت": 6,
+  "الأحد": 7,
+};
+
+const normalizeTime = (value: string) => {
+  const [hourPart, minutePart = "00"] = value.trim().split(":");
+  const hour = hourPart.padStart(2, "0");
+  const minute = minutePart.padStart(2, "0");
+  return `${hour}:${minute}`;
+};
+
+const displayTime = (value: string) => normalizeTime(value).replace(/^0/, "");
+
+const splitRange = (range: string) => {
+  const [rawStart = "08:00", rawEnd = "09:00"] = range.split("-").map((part) => part.trim());
+  return {
+    start: normalizeTime(rawStart),
+    end: normalizeTime(rawEnd),
+  };
+};
+
+const mapSessionFromApi = (
+  row: RecordMap,
+  groupName: string,
+  levelName: string,
+  subjectMap: Map<string, string>,
+): Session => {
+  const start = toText(row.start_time, toText(row.startTime, "08:00"));
+  const end = toText(row.end_time, toText(row.endTime, "09:00"));
+  const dayNumeric = Number(row.day_of_week ?? row.dayOfWeek ?? row.day);
+  const dayRaw = toText(row.day_of_week, toText(row.dayOfWeek, toText(row.day, "MONDAY"))).toUpperCase();
+  const subjectId = toText(row.subject_id, toText(row.subjectId, ""));
+  const day = Number.isFinite(dayNumeric)
+    ? (dayNumberToArabic[dayNumeric] ?? "الإثنين")
+    : (dayToArabic[dayRaw] ?? "الإثنين");
+
+  return {
+    id: toText(row.id, `${groupName}-${start}`),
+    day,
+    subject: toText(row.subject_name, toText(row.subjectName, subjectMap.get(subjectId) ?? "مادة")),
+    teacher: toText(row.teacher_name, toText(row.teacherName, "غير محدد")),
+    group: groupName,
+    room: toText(row.room_name, toText(row.roomName, "--")),
+    level: levelName,
+    time: `${displayTime(start)} - ${displayTime(end)}`,
+    source: "backend",
+    scopeType: toText(row.scope_type, toText(row.scopeType, "GROUP")).toUpperCase() as "GROUP" | "CLASS",
+    scopeId: toText(row.scope_id, toText(row.scopeId, "")),
+  };
+};
 
 function buildEmptySchedule() {
   const schedule: Record<string, Record<string, Session[]>> = {};
@@ -82,40 +123,6 @@ function buildEmptySchedule() {
     });
   });
   return schedule;
-}
-
-function mapSharedToSchedule(entries: SharedScheduleEntry[]) {
-  const mapped = buildEmptySchedule();
-  entries.forEach((entry) => {
-    if (!mapped[entry.day] || !mapped[entry.day][entry.time]) return;
-
-    mapped[entry.day][entry.time].push({
-      id: entry.id,
-      subject: entry.subject,
-      teacher: entry.teacher,
-      group: entry.group,
-      room: entry.room,
-      level: entry.level || "غير محدد",
-      time: entry.time,
-      source: "admin",
-      targetType: entry.targetType,
-      targetValue: entry.targetValue,
-    });
-  });
-  return mapped;
-}
-
-function mergeSchedules(
-  left: Record<string, Record<string, Session[]>>,
-  right: Record<string, Record<string, Session[]>>,
-) {
-  const merged = buildEmptySchedule();
-  days.forEach((day) => {
-    times.forEach((time) => {
-      merged[day][time] = [...left[day][time], ...right[day][time]];
-    });
-  });
-  return merged;
 }
 
 function CountBadge({ count }: { count: number }) {
@@ -158,9 +165,10 @@ function SessionModal({ session, onClose }: { session: Session; onClose: () => v
   );
 }
 
-function DayPanel({ day, schedule, onClose }: {
+function DayPanel({ day, schedule, timesList, onClose }: {
   day: string;
   schedule: Record<string, Session[]>;
+  timesList: string[];
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<Session | null>(null);
@@ -198,7 +206,7 @@ function DayPanel({ day, schedule, onClose }: {
           {/* Summary chips */}
           {total > 0 && (
             <div className="flex gap-2 mt-5 flex-wrap relative z-10">
-              {times.map((t) => {
+              {timesList.map((t) => {
                 const n = (schedule[t] ?? []).length;
                 if (n === 0) return null;
                 return (
@@ -216,7 +224,7 @@ function DayPanel({ day, schedule, onClose }: {
           className="flex-1 overflow-y-auto bg-[#f8f9fc] custom-scrollbar"
         >
           <div className="p-6 flex flex-col gap-6">
-            {times.map((time) => {
+            {timesList.map((time) => {
               const sessions = schedule[time] ?? [];
               return (
                 <div key={time} className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] overflow-hidden">
@@ -295,55 +303,139 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 export default function SchedulePage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [view, setView] = useState<"system" | "teacher">("system");
-  const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]);
+  const [selectedTeacher, setSelectedTeacher] = useState("");
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [sharedEntries, setSharedEntries] = useState<SharedScheduleEntry[]>(() => readSharedSchedules());
+  const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [groupOptions, setGroupOptions] = useState<Array<{ id: string; name: string; level: string }>>([]);
+  const [classOptions, setClassOptions] = useState<Array<{ id: string; name: string; level: string }>>([]);
+  const [subjectOptions, setSubjectOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [newEntry, setNewEntry] = useState({
-    targetType: "group" as ScheduleTargetType,
-    targetValue: groups[0],
+    scopeType: "group" as "group" | "class",
+    scopeId: "",
     day: days[0],
     time: times[0],
-    subject: subjects[0],
-    teacher: teachers[0],
-    group: groups[0],
+    subjectId: "",
     room: rooms[0],
-    level: levels[0],
-    notes: "",
   });
 
+  const loadSchedules = async () => {
+    setLoading(true);
+    try {
+      const [classRows, groupRows, subjectRows] = await Promise.all([
+        academicService.getClasses(),
+        academicService.getGroups(),
+        academicService.getSubjects(),
+      ]);
+
+      const classes = classRows.map((row) => ({
+        id: toText(row.id, ""),
+        name: toText(row.name, "قسم"),
+        level: toText(row.level_label, toText(row.levelLabel, "غير محدد")),
+      })).filter((row) => row.id.length > 0);
+
+      const groups = groupRows.map((row) => ({
+        id: toText(row.id, ""),
+        name: toText(row.name, "فوج"),
+        level: toText(row.level_label, toText(row.levelLabel, "غير محدد")),
+      })).filter((row) => row.id.length > 0);
+
+      const subjectsMap = new Map(
+        subjectRows
+          .map((row) => [toText(row.id, ""), toText(row.name, "مادة")] as const)
+          .filter(([id]) => id.length > 0),
+      );
+
+      const classSchedules = await Promise.allSettled(
+        classes.map(async (entry) => {
+          const rows = await scheduleService.getClassSchedule(entry.id);
+          return rows.map((row) => mapSessionFromApi(row, entry.name, entry.level, subjectsMap));
+        }),
+      );
+
+      const groupSchedules = await Promise.allSettled(
+        groups.map(async (entry) => {
+          const rows = await scheduleService.getGroupSchedule(entry.id);
+          return rows.map((row) => mapSessionFromApi(row, entry.name, entry.level, subjectsMap));
+        }),
+      );
+
+      const allSessions = [...classSchedules, ...groupSchedules]
+        .filter((result): result is PromiseFulfilledResult<Session[]> => result.status === "fulfilled")
+        .flatMap((result) => result.value);
+
+      const subjectOptionsData = subjectRows
+        .map((row) => ({ id: toText(row.id, ""), name: toText(row.name, "مادة") }))
+        .filter((row) => row.id.length > 0);
+
+      const teacherNames = Array.from(new Set(allSessions.map((item) => item.teacher).filter((name) => name.trim().length > 0)));
+
+      setSessions(allSessions);
+      setClassOptions(classes);
+      setGroupOptions(groups);
+      setSubjectOptions(subjectOptionsData);
+      setSelectedTeacher((prev) => prev || teacherNames[0] || "");
+      setNewEntry((prev) => ({
+        ...prev,
+        scopeId: prev.scopeId || groups[0]?.id || classes[0]?.id || "",
+        subjectId: prev.subjectId || subjectOptionsData[0]?.id || "",
+      }));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const syncSchedules = () => setSharedEntries(readSharedSchedules());
-    window.addEventListener("storage", syncSchedules);
-    return () => window.removeEventListener("storage", syncSchedules);
+    void loadSchedules();
   }, []);
 
-  const sharedSchedule = mapSharedToSchedule(sharedEntries);
-  const mergedSystemSchedule = mergeSchedules(systemSchedule, sharedSchedule);
-  const activeSchedule =
-    view === "system"
-      ? mergedSystemSchedule
-      : getTeacherSchedule(selectedTeacher, mergedSystemSchedule);
+  const activeSchedule = (() => {
+    const schedule = buildEmptySchedule();
+    const selectedSessions = view === "teacher"
+      ? sessions.filter((item) => item.teacher === selectedTeacher)
+      : sessions;
 
-  const createNewSchedule = () => {
-    if (!newEntry.targetValue.trim() || !newEntry.subject.trim()) return;
-
-    const next = addSharedSchedule({
-      targetType: newEntry.targetType,
-      targetValue: newEntry.targetValue,
-      day: newEntry.day,
-      time: newEntry.time,
-      subject: newEntry.subject,
-      teacher: newEntry.teacher,
-      group: newEntry.group,
-      room: newEntry.room,
-      level: newEntry.level,
-      notes: newEntry.notes,
+    selectedSessions.forEach((item) => {
+      if (!schedule[item.day] || !schedule[item.day][item.time]) return;
+      schedule[item.day][item.time].push(item);
     });
 
-    setSharedEntries(next);
-    setShowCreateModal(false);
+    return schedule;
+  })();
+
+  const createNewSchedule = async () => {
+    if (!newEntry.scopeId || !newEntry.subjectId) return;
+
+    const { start, end } = splitRange(newEntry.time);
+    const payload: RecordMap = {
+      subjectId: newEntry.subjectId,
+      roomName: newEntry.room,
+      dayOfWeek: dayArabicToNumber[newEntry.day] ?? 1,
+      startTime: start,
+      endTime: end,
+    };
+
+    try {
+      if (newEntry.scopeType === "group") {
+        await scheduleService.createGroupSession(newEntry.scopeId, payload);
+      } else {
+        await scheduleService.createClassSession(newEntry.scopeId, payload);
+      }
+      await loadSchedules();
+      setShowCreateModal(false);
+    } catch {
+      alert("تعذر حفظ الجدولة على الخادم");
+    }
   };
+
+  const teacherOptions = Array.from(new Set(sessions.map((item) => item.teacher).filter((name) => name.trim().length > 0)));
+
+  const gridTimes = Array.from(new Set([...times, ...sessions.map((item) => item.time)])).sort((left, right) => {
+    const leftStart = splitRange(left).start;
+    const rightStart = splitRange(right).start;
+    return leftStart.localeCompare(rightStart);
+  });
 
   return (
     <div dir="rtl" className="p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
@@ -383,7 +475,7 @@ export default function SchedulePage() {
               onChange={(e) => setSelectedTeacher(e.target.value)}
               className="border border-gray-100 rounded-xl px-4 py-2.5 text-sm text-[#2d2d5e] font-bold focus:outline-none focus:border-[#e01c8a] focus:ring-4 focus:ring-[#e01c8a]/10 bg-white transition-all shadow-sm"
             >
-              {teachers.map((t) => <option key={t} value={t}>{t}</option>)}
+              {teacherOptions.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           )}
         </div>
@@ -426,7 +518,7 @@ export default function SchedulePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {times.map((time) => (
+              {gridTimes.map((time) => (
                 <tr key={time} className="hover:bg-blue-50/10 transition-colors group/row">
                   <td className="p-4 text-gray-500 font-black text-center whitespace-nowrap border-l border-gray-100/60 text-xs bg-gray-50/30 group-hover/row:bg-white transition-colors">
                     {time}
@@ -486,14 +578,16 @@ export default function SchedulePage() {
 
       <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_-4px_rgba(0,0,0,0.04)] p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[#2d2d5e] text-lg font-black">الجداول المضافة من الإدارة</h2>
+          <h2 className="text-[#2d2d5e] text-lg font-black">جلسات الجدول من الخادم</h2>
           <span className="text-xs font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-3 py-1">
-            {sharedEntries.length} إدخال
+            {sessions.length} جلسة
           </span>
         </div>
 
-        {sharedEntries.length === 0 ? (
-          <p className="text-sm font-bold text-gray-400">لا توجد جداول مضافة بعد.</p>
+        {loading ? (
+          <p className="text-sm font-bold text-gray-400">جاري تحميل الجلسات...</p>
+        ) : sessions.length === 0 ? (
+          <p className="text-sm font-bold text-gray-400">لا توجد جلسات مجدولة بعد.</p>
         ) : (
           <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0">
             <table className="w-full text-right border-collapse">
@@ -504,19 +598,19 @@ export default function SchedulePage() {
                   <th className="py-3 px-4">اليوم / التوقيت</th>
                   <th className="py-3 px-4">المادة</th>
                   <th className="py-3 px-4">الأستاذ</th>
-                  <th className="py-3 px-4">الفوج</th>
+                  <th className="py-3 px-4">القسم/الفوج</th>
                   <th className="py-3 px-4">القاعة</th>
                 </tr>
               </thead>
               <tbody>
-                {sharedEntries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-gray-50 text-sm font-bold text-gray-600">
+                {sessions.map((entry) => (
+                  <tr key={String(entry.id)} className="border-b border-gray-50 text-sm font-bold text-gray-600">
                     <td className="py-3 px-4">
                       <span className="bg-rose-50 text-[#e01c8a] border border-rose-100 rounded-lg px-2 py-1 text-xs font-black">
-                        {entry.targetType === "group" ? "فوج" : entry.targetType === "teacher" ? "أستاذ" : "سكرتير"}
+                        {entry.scopeType === "GROUP" ? "فوج" : "قسم"}
                       </span>
                     </td>
-                    <td className="py-3 px-4">{entry.targetValue}</td>
+                    <td className="py-3 px-4">{entry.group}</td>
                     <td className="py-3 px-4">{entry.day} - {entry.time}</td>
                     <td className="py-3 px-4">{entry.subject}</td>
                     <td className="py-3 px-4">{entry.teacher}</td>
@@ -534,6 +628,7 @@ export default function SchedulePage() {
         <DayPanel
           day={selectedDay}
           schedule={activeSchedule[selectedDay]}
+          timesList={gridTimes}
           onClose={() => setSelectedDay(null)}
         />
       )}
@@ -553,15 +648,19 @@ export default function SchedulePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-black text-gray-500 block mb-2">الفئة المستهدفة</label>
-                <select value={newEntry.targetType} onChange={(e) => setNewEntry((prev) => ({ ...prev, targetType: e.target.value as ScheduleTargetType }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]">
+                <select value={newEntry.scopeType} onChange={(e) => setNewEntry((prev) => ({ ...prev, scopeType: e.target.value as "group" | "class", scopeId: "" }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]">
                   <option value="group">فوج</option>
-                  <option value="teacher">أستاذ</option>
-                  <option value="secretary">سكرتير</option>
+                  <option value="class">قسم</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs font-black text-gray-500 block mb-2">الاسم المستهدف</label>
-                <input value={newEntry.targetValue} onChange={(e) => setNewEntry((prev) => ({ ...prev, targetValue: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
+                <label className="text-xs font-black text-gray-500 block mb-2">القسم/الفوج المستهدف</label>
+                <select value={newEntry.scopeId} onChange={(e) => setNewEntry((prev) => ({ ...prev, scopeId: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]">
+                  <option value="">اختر...</option>
+                  {(newEntry.scopeType === "group" ? groupOptions : classOptions).map((option) => (
+                    <option key={option.id} value={option.id}>{option.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -579,17 +678,14 @@ export default function SchedulePage() {
 
               <div>
                 <label className="text-xs font-black text-gray-500 block mb-2">المادة</label>
-                <input value={newEntry.subject} onChange={(e) => setNewEntry((prev) => ({ ...prev, subject: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
-              </div>
-              <div>
-                <label className="text-xs font-black text-gray-500 block mb-2">الأستاذ</label>
-                <input value={newEntry.teacher} onChange={(e) => setNewEntry((prev) => ({ ...prev, teacher: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
+                <select value={newEntry.subjectId} onChange={(e) => setNewEntry((prev) => ({ ...prev, subjectId: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]">
+                  <option value="">اختر المادة...</option>
+                  {subjectOptions.map((subject) => (
+                    <option key={subject.id} value={subject.id}>{subject.name}</option>
+                  ))}
+                </select>
               </div>
 
-              <div>
-                <label className="text-xs font-black text-gray-500 block mb-2">الفوج</label>
-                <input value={newEntry.group} onChange={(e) => setNewEntry((prev) => ({ ...prev, group: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />
-              </div>
               <div>
                 <label className="text-xs font-black text-gray-500 block mb-2">القاعة</label>
                 <input value={newEntry.room} onChange={(e) => setNewEntry((prev) => ({ ...prev, room: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-[#2d2d5e]" />

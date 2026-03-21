@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { paymentsService } from "@/lib/api/payments.service";
+import type { RecordMap } from "@/lib/api/types";
 
 // ── Types ──────────────────────────────────────────────────────
 interface Payment {
@@ -29,6 +31,24 @@ const allPayments: Payment[] = Array.from({ length: 32 }, (_, i) => ({
   method:  i % 2 === 0 ? "نقدي" : "تحويل",
   status:  i % 5 === 4 ? "غير مدفوع" : "مدفوع",
 }));
+
+function mapPayment(item: RecordMap): Payment {
+  const amount = Number(item.amount ?? 0);
+  const dateRaw = String(item.paymentDate ?? item.date ?? item.createdAt ?? "");
+  const date = dateRaw.includes("T") ? dateRaw.split("T")[0] : dateRaw || new Date().toISOString().split("T")[0];
+  const method = String(item.paymentMethod ?? item.method ?? "نقدي") === "تحويل" ? "تحويل" : "نقدي";
+  const status = String(item.status ?? "").toLowerCase().includes("paid") || String(item.status ?? "") === "مدفوع" ? "مدفوع" : "غير مدفوع";
+  return {
+    id: String(item.id ?? item.paymentId ?? `PAY-${Date.now()}`),
+    student: String(item.studentName ?? item.student ?? "—"),
+    group: String(item.groupName ?? item.group ?? "—"),
+    level: String(item.levelLabel ?? item.level ?? "—"),
+    amount,
+    date,
+    method,
+    status,
+  };
+}
 
 // ── Add Payment Modal ──────────────────────────────────────────
 function AddModal({ onAdd, onClose }: { onAdd: (p: Payment) => void; onClose: () => void }) {
@@ -119,13 +139,61 @@ function AddModal({ onAdd, onClose }: { onAdd: (p: Payment) => void; onClose: ()
 
 // ── Main ───────────────────────────────────────────────────────
 export default function FinancePage() {
-  const [payments, setPayments]       = useState<Payment[]>(allPayments);
+  const [payments, setPayments]       = useState<Payment[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [search, setSearch]           = useState("");
   const [filterGroup, setFilterGroup] = useState<string>("الكل");
   const [filterLevel, setFilterLevel] = useState<string>("الكل");
   const [filterStatus, setFilterStatus] = useState<string>("الكل");
   const [filterMethod, setFilterMethod] = useState<string>("الكل");
   const [showAdd, setShowAdd]         = useState(false);
+
+  const loadPayments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await paymentsService.getAll();
+      setPayments(Array.isArray(data) ? data.map(mapPayment) : []);
+    } catch (error) {
+      console.error("Failed to load payments:", error);
+      setPayments(allPayments);
+      setActionMessage("تعذر تحميل بيانات الدفعات من الخادم، تم عرض بيانات محلية مؤقتة");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
+
+  const handleSendReminders = async () => {
+    try {
+      await paymentsService.sendReminders();
+      setActionMessage("تم إرسال تذكيرات الدفع بنجاح");
+    } catch (error) {
+      console.error("Failed to send reminders:", error);
+      setActionMessage("فشل إرسال التذكيرات");
+    }
+  };
+
+  const handleAddPayment = async (payment: Payment) => {
+    try {
+      await paymentsService.create({
+        studentName: payment.student,
+        groupName: payment.group,
+        levelLabel: payment.level,
+        amount: payment.amount,
+        paymentDate: payment.date,
+        paymentMethod: payment.method,
+      });
+      await loadPayments();
+    } catch (error) {
+      console.error("Payment create failed:", error);
+      setPayments(prev => [payment, ...prev]);
+      setActionMessage("تعذر حفظ الدفعة في الخادم، تمت إضافتها محلياً فقط");
+    }
+  };
 
   const filtered = useMemo(() => payments.filter(p => {
     const matchSearch  = search.trim() === "" || [p.student, p.id, p.group, p.level].some(v => v.includes(search));
@@ -147,6 +215,16 @@ export default function FinancePage() {
 
   const isFiltered = search || filterGroup !== "الكل" || filterLevel !== "الكل" || filterStatus !== "الكل" || filterMethod !== "الكل";
 
+  if (loading) {
+    return (
+      <div dir="rtl" className="p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 animate-pulse h-24" />
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 animate-pulse h-32" />
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 animate-pulse h-80" />
+      </div>
+    );
+  }
+
   return (
     <div dir="rtl" className="p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
       {/* ── Header ── */}
@@ -155,10 +233,21 @@ export default function FinancePage() {
           <h1 className="text-2xl font-black text-[#2d2d5e] mb-1">المالية والمداخيل</h1>
           <p className="text-sm font-semibold text-gray-500">إدارة مدفوعات الطلاب وتتبع الإيرادات</p>
         </div>
-        <div className="p-3 bg-green-500/10 rounded-2xl">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        <div className="flex items-center gap-2">
+          <button onClick={handleSendReminders} className="px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 text-orange-600 text-xs font-bold hover:bg-orange-100 transition-colors">إرسال التذكيرات</button>
+          <button onClick={() => paymentsService.exportExcel()} className="px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors">تصدير Excel</button>
+          <button onClick={() => paymentsService.exportPdf()} className="px-3 py-2 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 text-xs font-bold hover:bg-purple-100 transition-colors">تصدير PDF</button>
+          <div className="p-3 bg-green-500/10 rounded-2xl">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          </div>
         </div>
       </div>
+
+      {actionMessage && (
+        <div className="px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 text-sm font-bold text-[#2d2d5e]">
+          {actionMessage}
+        </div>
+      )}
 
       {/* ── Stats row ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -324,7 +413,7 @@ export default function FinancePage() {
         )}
       </div>
 
-      {showAdd && <AddModal onAdd={p => setPayments(prev => [p, ...prev])} onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddModal onAdd={handleAddPayment} onClose={() => setShowAdd(false)} />}
     </div>
   );
 }

@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect, ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { readSharedSchedules, SharedScheduleEntry } from "@/lib/sharedSchedule";
 import DashboardNavButton from "@/components/DashboardNavButton";
+import { AuthGuard } from "@/lib/auth/AuthGuard";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { parentService } from "@/lib/api/parent.service";
+import { communicationService } from "@/lib/api/communication.service";
+import type { RecordMap } from "@/lib/api/types";
 
 // --- Types ---
 type ParentPageKey =
@@ -27,11 +32,19 @@ type ParentScheduleSession = {
 
 type ParentAttendanceRecord = {
   id: string;
-  childId: number;
+  childId: string;
   date: string;
   subject: string;
   status: "حاضر" | "غائب" | "متأخر";
   notes: string;
+};
+
+type ParentChildItem = {
+  id: string;
+  name: string;
+  level: string;
+  subscriptions: number;
+  group: string;
 };
 
 const pageTitles: Record<ParentPageKey, string> = {
@@ -97,34 +110,135 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-// --- Mock Data ---
-
-const childrenData = [
-  { id: 1, name: "ياسين", level: "الثانية باكالوريا", subscriptions: 3, group: "AB12" },
-  { id: 2, name: "مريم", level: "الجدع المشترك", subscriptions: 2, group: "CD14" },
-];
-
-export default function ParentDashboardCoursSup() {
+function ParentDashboardContent() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [currentPage, setCurrentPage] = useState<ParentPageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [selectedChildId, setSelectedChildId] = useState<number>(1);
+  const [childrenData, setChildrenData] = useState<ParentChildItem[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [selectedAttendanceDate, setSelectedAttendanceDate] = useState("2026-03-12");
   const [selectedScheduleSession, setSelectedScheduleSession] = useState<ParentScheduleSession | null>(null);
   const [toastMessage, setToastMessage] = useState<{message: string, type: 'success'|'error'|'info'} | null>(null);
   const [sharedSchedules, setSharedSchedules] = useState<SharedScheduleEntry[]>(() => readSharedSchedules());
+  const [childSchedule, setChildSchedule] = useState<ParentScheduleSession[]>([]);
+  const [childAttendance, setChildAttendance] = useState<ParentAttendanceRecord[]>([]);
+  const [childPayments, setChildPayments] = useState<RecordMap[]>([]);
+  const [childAnnouncements, setChildAnnouncements] = useState<RecordMap[]>([]);
+  const [parentMessages, setParentMessages] = useState<RecordMap[]>([]);
+  const [messageInput, setMessageInput] = useState("");
 
   const showToast = (message: string, type: 'success'|'error'|'info' = 'success') => {
     setToastMessage({ message, type });
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     showToast("جاري تسجيل الخروج...", "info");
-    setTimeout(() => {
-      router.push("/");
-    }, 1500);
+    try {
+      await logout();
+    } finally {
+      setTimeout(() => {
+        router.push("/");
+      }, 600);
+    }
   };
+
+  const toText = (value: unknown, fallback = "") =>
+    typeof value === "string" && value.trim().length > 0 ? value : fallback;
+  const toNumber = (value: unknown, fallback = 0) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const toArabicAttendance = (value: unknown): "حاضر" | "غائب" | "متأخر" => {
+    const normalized = toText(value, "").toLowerCase();
+    if (normalized.includes("late") || normalized.includes("retard") || normalized.includes("متأخر")) return "متأخر";
+    if (normalized.includes("abs") || normalized.includes("غائب") || normalized.includes("absent")) return "غائب";
+    return "حاضر";
+  };
+
+  const loadChildren = useCallback(async () => {
+    try {
+      const children = await parentService.getMyChildren();
+      const mapped = children.map((row, index) => ({
+        id: toText(row.id, String(index + 1)),
+        name: toText(row.fullName, `ابن ${index + 1}`),
+        level: toText(row.levelLabel, toText(row.className, "غير محدد")),
+        subscriptions: toNumber(row.subscriptionCount, 0),
+        group: toText(row.groupName, toText(row.className, "غير محدد")),
+      }));
+      setChildrenData(mapped);
+      if (mapped.length > 0) {
+        setSelectedChildId(prev => prev || mapped[0].id);
+      }
+    } catch {
+      showToast("تعذر تحميل بيانات الأبناء", "error");
+      setChildrenData([]);
+    }
+  }, []);
+
+  const loadParentMessages = useCallback(async () => {
+    try {
+      const messages = await parentService.getMyMessages();
+      setParentMessages(messages);
+    } catch {
+      setParentMessages([]);
+    }
+  }, []);
+
+  const loadChildDetails = useCallback(async (childId: string) => {
+    if (!childId) return;
+    try {
+      const [scheduleRows, attendanceRows, paymentRows, announcementRows] = await Promise.all([
+        parentService.getChildSchedule(childId),
+        parentService.getChildAttendance(childId),
+        parentService.getChildPayment(childId),
+        parentService.getChildAnnouncements(childId),
+      ]);
+
+      const mappedSchedule: ParentScheduleSession[] = scheduleRows.map((row, index) => ({
+        id: toText(row.id, `P-S-${index}`),
+        day: toText(row.day, toText(row.jour, "الإثنين")),
+        time: toText(row.time, toText(row.startTime, "--:--")),
+        subject: toText(row.subject, toText(row.subjectName, "مادة")),
+        teacher: toText(row.teacher, toText(row.teacherName, "أستاذ")),
+        room: toText(row.room, toText(row.roomName, "قاعة")),
+        group: toText(row.group, toText(row.groupName, "")),
+      }));
+
+      const mappedAttendance: ParentAttendanceRecord[] = attendanceRows.map((row, index) => ({
+        id: toText(row.id, `PA-${index}`),
+        childId,
+        date: toText(row.date, toText(row.sessionDate, "")),
+        subject: toText(row.subject, toText(row.subjectName, "مادة")),
+        status: toArabicAttendance(row.status),
+        notes: toText(row.notes, toText(row.justification, "-")),
+      }));
+
+      setChildSchedule(mappedSchedule);
+      setChildAttendance(mappedAttendance);
+      setChildPayments(paymentRows);
+      setChildAnnouncements(announcementRows);
+    } catch {
+      showToast("تعذر تحميل تفاصيل الابن", "error");
+      setChildSchedule([]);
+      setChildAttendance([]);
+      setChildPayments([]);
+      setChildAnnouncements([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadChildren();
+    loadParentMessages();
+  }, [loadChildren, loadParentMessages]);
+
+  useEffect(() => {
+    if (selectedChildId) {
+      void loadChildDetails(selectedChildId);
+    }
+  }, [selectedChildId, loadChildDetails]);
 
   const selectedChild = childrenData.find(c => c.id === selectedChildId) || childrenData[0];
 
@@ -159,20 +273,17 @@ export default function ParentDashboardCoursSup() {
   );
 
   const [notifications, setNotifications] = useState([
-    { id: 1, title: `تذكير بموعد حصة الرياضيات ل${selectedChild.name}`, time: "منذ 5 دقائق", read: false },
-    { id: 2, title: "فاتورة شهر مارس بانتظار الدفع", time: "منذ ساعتين", read: false },
+    { id: 1, title: "تحديث جديد في حساب ولي الأمر", time: "منذ 5 دقائق", read: false },
+    { id: 2, title: "يرجى مراجعة حالة المدفوعات", time: "منذ ساعتين", read: false },
   ]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const markAllAsRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
 
   const dayOrder = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
-  const baseParentSessions: ParentScheduleSession[] = [
-    { id: "P-S1", day: "الإثنين", time: "18:30 - 20:00 م", subject: "الرياضيات", teacher: "أ. أحمد", room: "قاعة 203", group: selectedChild.group },
-    { id: "P-S2", day: "الأربعاء", time: "18:30 - 20:00 م", subject: "الفيزياء", teacher: "أ. سارة", room: "قاعة 107", group: selectedChild.group },
-  ];
+  const selectedGroup = selectedChild?.group ?? "";
   const adminParentSessions: ParentScheduleSession[] = sharedSchedules
-    .filter((item) => item.targetType === "group" && item.targetValue === selectedChild.group)
+    .filter((item) => item.targetType === "group" && item.targetValue === selectedGroup)
     .map((item, index) => ({
       id: `P-SA-${index}`,
       day: item.day,
@@ -182,25 +293,35 @@ export default function ParentDashboardCoursSup() {
       room: item.room,
       group: item.group,
     }));
-  const parentScheduleSessions = [...baseParentSessions, ...adminParentSessions];
+  const parentScheduleSessions = [...childSchedule, ...adminParentSessions];
   const parentScheduleByDay = dayOrder.reduce<Record<string, ParentScheduleSession[]>>((acc, day) => {
     acc[day] = parentScheduleSessions.filter((session) => session.day === day);
     return acc;
   }, {});
 
-  const attendanceRecords: ParentAttendanceRecord[] = [
-    { id: "PA-1", childId: 1, date: "2026-03-12", subject: "الرياضيات", status: "حاضر", notes: "-" },
-    { id: "PA-2", childId: 1, date: "2026-03-12", subject: "الفيزياء", status: "غائب", notes: "تم إشعار الإدارة" },
-    { id: "PA-3", childId: 1, date: "2026-03-11", subject: "العلوم", status: "متأخر", notes: "تأخير 10 دقائق" },
-    { id: "PA-4", childId: 2, date: "2026-03-12", subject: "الفرنسية", status: "حاضر", notes: "-" },
-    { id: "PA-5", childId: 2, date: "2026-03-11", subject: "الرياضيات", status: "غائب", notes: "تقرير إداري" },
-  ];
-  const filteredParentAttendance = attendanceRecords.filter(
-    (row) => row.childId === selectedChild.id && row.date === selectedAttendanceDate,
-  );
+  const filteredParentAttendance = childAttendance.filter((row) => row.date === selectedAttendanceDate);
   const presentCount = filteredParentAttendance.filter((row) => row.status === "حاضر").length;
   const absentCount = filteredParentAttendance.filter((row) => row.status === "غائب").length;
   const lateCount = filteredParentAttendance.filter((row) => row.status === "متأخر").length;
+  const childName = selectedChild?.name ?? "الابن";
+  const todayPreviewSessions = parentScheduleSessions.slice(0, 2);
+  const latestAnnouncements = childAnnouncements.slice(0, 2);
+  const unpaidCount = childPayments.filter((row) => {
+    const status = toText(row.status, "").toLowerCase();
+    return status.includes("unpaid") || status.includes("غير") || status.includes("pending");
+  }).length;
+
+  const handleSendParentMessage = async () => {
+    if (!messageInput.trim()) return;
+    try {
+      await parentService.sendMyMessage({ message: messageInput.trim() });
+      setMessageInput("");
+      showToast("تم إرسال الرسالة", "success");
+      await loadParentMessages();
+    } catch {
+      showToast("تعذر إرسال الرسالة", "error");
+    }
+  };
 
   const content = (() => {
     switch (currentPage) {
@@ -209,51 +330,51 @@ export default function ParentDashboardCoursSup() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard title="الأبناء المسجلين" value={childrenData.length.toString()} subtitle="إدارة ملفات الأبناء" onClick={() => setCurrentPage('children')} />
-              <StatCard title="اشتراكات غير مدفوعة" value="1" subtitle="يرجى مراجعة المدفوعات" highlight={true} onClick={() => setCurrentPage('payments')} />
+              <StatCard title="اشتراكات غير مدفوعة" value={String(unpaidCount)} subtitle="يرجى مراجعة المدفوعات" highlight={true} onClick={() => setCurrentPage('payments')} />
               <StatCard title="الإعلانات غير المقروءة" value={unreadCount.toString()} subtitle="إشعارات المدرسة" onClick={() => setCurrentPage('announcements')} />
-              <StatCard title="حصص اليوم" value="2" subtitle={`تخص ${selectedChild.name}`} onClick={() => setCurrentPage('schedule')} />
+              <StatCard title="حصص اليوم" value={String(todayPreviewSessions.length)} subtitle={`تخص ${childName}`} onClick={() => setCurrentPage('schedule')} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SectionCard title={`جدول اليوم - ${selectedChild.name}`}>
+              <SectionCard title={`جدول اليوم - ${childName}`}>
                 <div className="flex flex-col gap-3">
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
-                    <div>
-                      <h4 className="font-black text-[#2d2d5e] text-sm">الرياضيات (حصص دعم)</h4>
-                      <p className="text-xs text-gray-500 font-bold mt-1">أ. أحمد • قاعة 203</p>
-                    </div>
-                    <div className="bg-[#e01c8a]/10 text-[#e01c8a] px-3 py-1.5 rounded-xl text-sm font-black text-left">
-                      18:30 م
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
-                    <div>
-                      <h4 className="font-black text-[#2d2d5e] text-sm">الفيزياء (حصص دعم)</h4>
-                      <p className="text-xs text-gray-500 font-bold mt-1">أ. سارة • قاعة 107</p>
-                    </div>
-                    <div className="bg-[#e01c8a]/10 text-[#e01c8a] px-3 py-1.5 rounded-xl text-sm font-black text-left">
-                      20:00 م
-                    </div>
-                  </div>
+                  {todayPreviewSessions.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                      لا توجد حصص متاحة حالياً
+                    </p>
+                  ) : (
+                    todayPreviewSessions.map((session) => (
+                      <div key={session.id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between hover:border-[#e01c8a]/30 transition-colors">
+                        <div>
+                          <h4 className="font-black text-[#2d2d5e] text-sm">{session.subject}</h4>
+                          <p className="text-xs text-gray-500 font-bold mt-1">{session.teacher} • {session.room}</p>
+                        </div>
+                        <div className="bg-[#e01c8a]/10 text-[#e01c8a] px-3 py-1.5 rounded-xl text-sm font-black text-left">
+                          {session.time}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </SectionCard>
 
               <SectionCard title="أحدث الإعلانات">
                 <div className="flex flex-col gap-3">
-                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 hover:bg-rose-100/50 transition-colors cursor-pointer" onClick={() => showToast("عرض تفاصيل الإعلان...", "info")}>
-                    <div className="w-2 h-2 mt-1.5 bg-[#e01c8a] rounded-full shadow-[0_0_8px_rgba(224,28,138,0.5)]"></div>
-                    <div>
-                      <h4 className="font-black text-rose-900 text-sm">توقف استثنائي</h4>
-                      <p className="text-xs text-rose-700 font-bold mt-1">لا توجد حصص دعم يوم الجمعة مساءً.</p>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-start gap-4 hover:bg-blue-100/50 transition-colors cursor-pointer" onClick={() => showToast("عرض تفاصيل الإعلان...", "info")}>
-                    <div className="w-2 h-2 mt-1.5 bg-blue-500 rounded-full"></div>
-                    <div>
-                      <h4 className="font-black text-blue-900 text-sm">تذكير بالأداء</h4>
-                      <p className="text-xs text-blue-700 font-bold mt-1">المرجو تسوية اشتراكات الشهر الجاري.</p>
-                    </div>
-                  </div>
+                  {latestAnnouncements.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                      لا توجد إعلانات متاحة
+                    </p>
+                  ) : (
+                    latestAnnouncements.map((row, index) => (
+                      <div key={`home-ann-${index}`} className="p-4 rounded-2xl bg-rose-50 border border-rose-100 flex items-start gap-4 hover:bg-rose-100/50 transition-colors cursor-pointer" onClick={() => showToast("عرض تفاصيل الإعلان...", "info")}>
+                        <div className="w-2 h-2 mt-1.5 bg-[#e01c8a] rounded-full shadow-[0_0_8px_rgba(224,28,138,0.5)]"></div>
+                        <div>
+                          <h4 className="font-black text-rose-900 text-sm">{toText(row.title, "إعلان جديد")}</h4>
+                          <p className="text-xs text-rose-700 font-bold mt-1">{toText(row.content, toText(row.preview, ""))}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </SectionCard>
             </div>
@@ -309,7 +430,7 @@ export default function ParentDashboardCoursSup() {
 
       case "schedule":
         return (
-          <SectionCard title={`الجدول الدراسي - ${selectedChild.name}`}>
+          <SectionCard title={`الجدول الدراسي - ${childName}`}>
             <div className="space-y-6">
               {dayOrder.map((day) => {
                 const sessions = parentScheduleByDay[day] ?? [];
@@ -352,7 +473,7 @@ export default function ParentDashboardCoursSup() {
 
       case "attendance":
         return (
-          <SectionCard title={`سجل الحضور والغياب - ${selectedChild.name}`}>
+          <SectionCard title={`سجل الحضور والغياب - ${childName}`}>
              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                <div>
                  <label className="mb-1 block text-xs font-bold text-gray-500">اختر اليوم</label>
@@ -430,67 +551,61 @@ export default function ParentDashboardCoursSup() {
         return (
           <SectionCard title="سجل المدفوعات (اشتراكات الدعم)">
             <p className="text-gray-500 text-sm mb-6 font-medium">ملاحظة: يمكنك الاطلاع على حالة الأداء لكل اشتراك. يرجى تسوية أي مستحقات لدى الإدارة.</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="border border-gray-200 rounded-2xl p-5 hover:border-[#e01c8a]/30 transition-all shadow-sm bg-white">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="font-black text-[#2d2d5e] text-lg">الرياضيات - أ. أحمد</h4>
-                    <p className="text-sm text-gray-500 font-bold mt-1">اشتراك شهر مارس ({selectedChild.name})</p>
-                  </div>
-                  <span className="bg-green-100 text-green-700 font-black px-3 py-1.5 rounded-lg text-xs border border-green-200">
-                    مدفوع بالكامل
-                  </span>
-                </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <span className="font-black text-lg text-[#2d2d5e]">350 درهم</span>
-                </div>
-              </div>
 
-              <div className="border border-red-200 bg-red-50/30 rounded-2xl p-5 hover:border-red-300 transition-all shadow-sm">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="font-black text-[#2d2d5e] text-lg">الفيزياء - أ. سارة</h4>
-                    <p className="text-sm text-gray-500 font-bold mt-1">اشتراك شهر مارس ({selectedChild.name})</p>
-                  </div>
-                  <span className="bg-red-100 text-red-700 font-black px-3 py-1.5 rounded-lg text-xs border border-red-200">
-                    غير مدفوع
-                  </span>
-                </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <span className="font-black text-lg text-[#2d2d5e]">350 درهم</span>
-                </div>
+            {childPayments.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                لا توجد مدفوعات متاحة لهذا الابن
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {childPayments.map((row, index) => {
+                  const statusText = toText(row.status, "غير محدد");
+                  const isPaid = statusText.toLowerCase().includes("paid") || statusText.includes("مدفوع");
+                  return (
+                    <div key={`payment-${index}`} className={`rounded-2xl p-5 hover:border-[#e01c8a]/30 transition-all shadow-sm ${isPaid ? "border border-gray-200 bg-white" : "border border-red-200 bg-red-50/30"}`}>
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-black text-[#2d2d5e] text-lg">{toText(row.subjectName, toText(row.subject, "اشتراك"))}</h4>
+                          <p className="text-sm text-gray-500 font-bold mt-1">{toText(row.period, "اشتراك") + ` (${childName})`}</p>
+                        </div>
+                        <span className={`font-black px-3 py-1.5 rounded-lg text-xs border ${isPaid ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200"}`}>
+                          {isPaid ? "مدفوع بالكامل" : "غير مدفوع"}
+                        </span>
+                      </div>
+                      <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <span className="font-black text-lg text-[#2d2d5e]">{toNumber(row.amount, 0)} درهم</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </SectionCard>
         );
 
       case "announcements":
         return (
           <SectionCard title="الإعلانات والمستجدات">
-            <div className="flex flex-col gap-4">
-              <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-[#e01c8a]/30 transition-all">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md">الإدارة المركزية</span>
-                  <span className="text-xs text-gray-400 font-bold">اليوم الساعة 10:00 ص</span>
-                </div>
-                <h4 className="font-black text-[#2d2d5e] text-base mb-2">تسجيلات مكثفة للامتحانات الوطنية</h4>
-                <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                  السادة الآباء، نعلمكم عن فتح باب التسجيل لفوج خاص بالامتحانات الوطنية لشهر يونيو. المقاعد محدودة.
-                </p>
+            {childAnnouncements.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                لا توجد إعلانات حالياً
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {childAnnouncements.map((row, index) => (
+                  <div key={`announcement-${index}`} className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-[#e01c8a]/30 transition-all">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md">{toText(row.scope, "الإدارة")}</span>
+                      <span className="text-xs text-gray-400 font-bold">{toText(row.createdAt, "")}</span>
+                    </div>
+                    <h4 className="font-black text-[#2d2d5e] text-base mb-2">{toText(row.title, "إعلان")}</h4>
+                    <p className="text-sm text-gray-600 font-medium leading-relaxed">
+                      {toText(row.content, "")}
+                    </p>
+                  </div>
+                ))}
               </div>
-
-              <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-[#e01c8a]/30 transition-all">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-purple-100 text-purple-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md">أستاذ أحمد (رياضيات)</span>
-                  <span className="text-xs text-gray-400 font-bold">أمس الساعة 18:00 م</span>
-                </div>
-                <h4 className="font-black text-[#2d2d5e] text-base mb-2">حصص إضافية مجانية</h4>
-                <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                  سيتم إجراء حصة مراجعة شاملة للوحدة الثانية يوم الأحد صباحاً لجميع المشتركين.
-                </p>
-              </div>
-            </div>
+            )}
           </SectionCard>
         );
 
@@ -512,19 +627,23 @@ export default function ParentDashboardCoursSup() {
              
              {/* Chat Thread */}
              <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4 bg-gray-50/30">
-                <div className="self-end max-w-sm">
-                   <div className="bg-[#e01c8a] text-white p-3 rounded-2xl rounded-tr-none shadow-sm text-sm">
-                      السلام عليكم، أود الاستفسار عن إمكانية إضافة حصة علوم فيزيائية لابني ياسين ضمن اشتراكات هذا الشهر.
+               {parentMessages.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                  لا توجد رسائل حالياً
+                </p>
+               ) : (
+                parentMessages.map((row, index) => {
+                  const isMine = toText(row.direction, "").toUpperCase() === "OUT" || Boolean(row.mine);
+                  return (
+                   <div key={`msg-${index}`} className={`${isMine ? "self-end" : "self-start"} max-w-sm`}>
+                    <div className={`${isMine ? "bg-[#e01c8a] text-white rounded-tr-none" : "bg-white border border-gray-200 text-gray-700 rounded-tl-none"} p-3 rounded-2xl shadow-sm text-sm`}>
+                      {toText(row.message, toText(row.content, ""))}
+                    </div>
+                    <p className={`text-[10px] text-gray-400 mt-1 ${isMine ? "text-right" : "text-left"}`}>{toText(row.createdAt, "")}</p>
                    </div>
-                   <p className="text-[10px] text-gray-400 mt-1 text-right">أمس, 14:30</p>
-                </div>
-                
-                <div className="self-start max-w-sm">
-                   <div className="bg-white border border-gray-200 text-gray-700 p-3 rounded-2xl rounded-tl-none shadow-sm text-sm">
-                      وعليكم السلام، نعم يمكن ذلك. يرجى تأكيد الرغبة حتى يتم إضافته لجدول الأستاذة سارة، وتبلغ التكلفة 350 درهم تضاف لاشتراك الشهر القادم.
-                   </div>
-                   <p className="text-[10px] text-gray-400 mt-1 text-left">أمس, 15:45</p>
-                </div>
+                  );
+                })
+               )}
              </div>
              
              {/* Input Area */}
@@ -532,9 +651,11 @@ export default function ParentDashboardCoursSup() {
                 <input 
                    type="text" 
                    placeholder="اكتب رسالتك للإدارة هنا..." 
+                 value={messageInput}
+                 onChange={(e) => setMessageInput(e.target.value)}
                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#e01c8a]/50 focus:ring-2 focus:ring-[#e01c8a]/10 transition-all text-gray-700" 
                 />
-                <button onClick={() => showToast("جاري إرسال الرسالة...", "success")} className="w-12 h-12 bg-[#e01c8a] hover:bg-rose-600 text-white rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
+               <button onClick={handleSendParentMessage} className="w-12 h-12 bg-[#e01c8a] hover:bg-rose-600 text-white rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="-ml-1"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                 </button>
              </div>
@@ -832,5 +953,13 @@ export default function ParentDashboardCoursSup() {
         </div>
       )}
     </>
+  );
+}
+
+export default function ParentDashboardCoursSup() {
+  return (
+    <AuthGuard allowedRoles={['PARENT']}>
+      <ParentDashboardContent />
+    </AuthGuard>
   );
 }

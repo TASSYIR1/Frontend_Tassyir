@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { attendanceService } from "@/lib/api/attendance.service";
 
 // ── Types ──────────────────────────────────────────────────────
 interface AttendanceRecord {
@@ -133,6 +134,22 @@ export default function AttendancePage({ readOnly = false }: { readOnly?: boolea
 
   const isFiltered = search || filterGroup !== "الكل" || filterLevel !== "الكل" || filterStatus !== "الكل" || filterSession !== "الكل";
 
+  const handleExportPdf = async () => {
+    try {
+      await attendanceService.exportPdf();
+    } catch (error) {
+      console.error("Attendance PDF export failed:", error);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      await attendanceService.exportExcel();
+    } catch (error) {
+      console.error("Attendance Excel export failed:", error);
+    }
+  };
+
   return (
     <div dir="rtl" className="p-8 flex flex-col gap-8 max-w-7xl mx-auto">
       {/* ── Header ── */}
@@ -147,10 +164,14 @@ export default function AttendancePage({ readOnly = false }: { readOnly?: boolea
               : "تابع حضور الطلاب واستخرج الإحصائيات"}
           </p>
         </div>
-        <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 shadow-inner">
+        <div className="flex items-center gap-2">
+          <button onClick={handleExportExcel} className="px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors">تصدير Excel</button>
+          <button onClick={handleExportPdf} className="px-3 py-2 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 text-xs font-bold hover:bg-purple-100 transition-colors">تصدير PDF</button>
+          <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 shadow-inner">
           <span className="text-gray-400 text-lg">📅</span>
           <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
             className="text-base text-[#2d2d5e] font-bold focus:outline-none bg-transparent" />
+          </div>
         </div>
       </div>
 

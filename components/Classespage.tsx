@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { academicService } from "@/lib/api/academic.service";
+import type { RecordMap } from "@/lib/api/types";
 
 // ── Types ──────────────────────────────────────────────────────
 interface ClassCard {
@@ -31,16 +33,43 @@ const teachers = [
   "بوزيد سارة",
 ];
 
-const allClasses: ClassCard[] = Array.from({ length: 24 }, (_, i) => ({
-  id: `CLS-${100 + i}`,
-  teacher: teachers[i % teachers.length],
-  group: `الفوج ${(i % 5) + 1}`,
-  schedule: schedules[i % schedules.length],
-  room: String(20 + (i % 15)),
-  students: 25 + (i % 15),
-  subject: subjects[i % subjects.length],
-  level: levels[i % levels.length],
-}));
+const allClasses: ClassCard[] = [];
+
+const toText = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim().length > 0 ? value : fallback;
+
+const toNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const mapClassFromApi = (row: RecordMap, index: number): ClassCard => {
+  const levelLabel = toText(row.level_label, toText(row.levelLabel, "أولى ثانوي"));
+  const safeLevel: ClassCard["level"] = levels.includes(levelLabel as ClassCard["level"])
+    ? (levelLabel as ClassCard["level"])
+    : "أولى ثانوي";
+
+  return {
+    id: toText(row.id, `CLS-${100 + index}`),
+    teacher: toText(row.teacher_name, toText(row.teacherName, toText(row.teacher, teachers[index % teachers.length]))),
+    group: toText(row.name, toText(row.group_name, `الفوج ${(index % 5) + 1}`)),
+    schedule: toText(row.schedule_label, toText(row.schedule, schedules[index % schedules.length])),
+    room: toText(row.room_name, toText(row.roomName, "--")),
+    students: toNumber(row.students_count, toNumber(row.studentCount, 0)),
+    subject: toText(row.subject_name, toText(row.subjectName, subjects[index % subjects.length])),
+    level: safeLevel,
+  };
+};
+
+const toClassApiPayload = (cls: ClassCard): RecordMap => ({
+  name: cls.group,
+  levelLabel: cls.level,
+  roomName: cls.room,
+  subjectName: cls.subject,
+  scheduleLabel: cls.schedule,
+  studentsCount: cls.students,
+  teacherName: cls.teacher,
+});
 
 // ── View / Edit / Delete Modals ────────────────────────────────
 function ViewModal({ cls, onClose }: { cls: ClassCard; onClose: () => void }) {
@@ -316,6 +345,22 @@ export default function ClassesPage() {
   const [viewCard,   setViewCard]   = useState<ClassCard | null>(null);
   const [editCard,   setEditCard]   = useState<ClassCard | null>(null);
   const [deleteCard, setDeleteCard] = useState<ClassCard | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadClasses = async () => {
+      try {
+        const rows = await academicService.getClasses();
+        setClasses(rows.map((row, index) => mapClassFromApi(row, index)));
+      } catch {
+        setClasses(allClasses);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadClasses();
+  }, []);
 
   // ── Filtered classes ──
   const filtered = classes.filter((c) => {
@@ -333,19 +378,35 @@ export default function ClassesPage() {
   ));
 
   // ── Handlers ──
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteCard) return;
-    setClasses((prev) => prev.filter((c) => c.id !== deleteCard.id));
+    try {
+      await academicService.deleteClass(deleteCard.id);
+      setClasses((prev) => prev.filter((c) => c.id !== deleteCard.id));
+    } catch {
+      alert("تعذر حذف الفصل من الخادم");
+    }
     setDeleteCard(null);
   };
 
-  const handleSaveEdit = (updated: ClassCard) => {
-    setClasses((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+  const handleSaveEdit = async (updated: ClassCard) => {
+    try {
+      await academicService.updateClass(updated.id, toClassApiPayload(updated));
+      setClasses((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+    } catch {
+      alert("تعذر تعديل الفصل على الخادم");
+    }
     setEditCard(null);
   };
 
-  const handleAdd = (c: ClassCard) => {
-    setClasses((prev) => [c, ...prev]);
+  const handleAdd = async (c: ClassCard) => {
+    try {
+      const created = await academicService.createClass(toClassApiPayload(c));
+      const mapped = mapClassFromApi(created, 0);
+      setClasses((prev) => [mapped, ...prev]);
+    } catch {
+      alert("تعذر إضافة الفصل على الخادم");
+    }
   };
 
   return (
@@ -458,7 +519,12 @@ export default function ClassesPage() {
 
           {/* Cards grid */}
           <div className="flex-1 overflow-y-auto p-6 bg-[#f8f9fc]/50 custom-scrollbar">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3">
+                <p className="text-[#2d2d5e] font-black text-lg">جاري تحميل الفصول...</p>
+                <p className="text-gray-400 font-semibold text-sm">يتم جلب البيانات من الخادم</p>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-4">
                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100">
                   <span className="text-5xl opacity-40">📭</span>

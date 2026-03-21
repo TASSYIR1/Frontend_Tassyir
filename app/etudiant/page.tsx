@@ -4,6 +4,13 @@ import { useState, useRef, useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { readSharedSchedules, SharedScheduleEntry } from "@/lib/sharedSchedule";
 import DashboardNavButton from "@/components/DashboardNavButton";
+import { AuthGuard } from "@/lib/auth/AuthGuard";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { scheduleService } from "@/lib/api/schedule.service";
+import { attendanceService } from "@/lib/api/attendance.service";
+import { paymentsService } from "@/lib/api/payments.service";
+import { communicationService } from "@/lib/api/communication.service";
+import type { RecordMap } from "@/lib/api/types";
 
 // --- Types ---
 type StudentPageKey =
@@ -15,7 +22,7 @@ type StudentPageKey =
   | "announcements";
 
 type Announcement = {
-  id: number;
+  id: string;
   type: "admin" | "teacher";
   title: string;
   preview: string;
@@ -102,8 +109,9 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 
 // --- Main Page ---
 
-export default function StudentDashboard() {
+function StudentDashboardContent() {
   const router = useRouter();
+  const { logout, user } = useAuth();
   const [currentPage, setCurrentPage] = useState<StudentPageKey>("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [toastMessage, setToastMessage] = useState<{msg: string, type: 'success'|'info'|'error'} | null>(null);
@@ -113,40 +121,103 @@ export default function StudentDashboard() {
   const [selectedScheduleSession, setSelectedScheduleSession] = useState<ScheduleSession | null>(null);
   const [selectedAttendanceDate, setSelectedAttendanceDate] = useState("2026-03-12");
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const [studentAnnouncements, setStudentAnnouncements] = useState<Announcement[]>([]);
+  const [studentScheduleRows, setStudentScheduleRows] = useState<ScheduleSession[]>([]);
+  const [studentAttendanceRows, setStudentAttendanceRows] = useState<StudentAttendanceRecord[]>([]);
+  const [studentPaymentRows, setStudentPaymentRows] = useState<RecordMap[]>([]);
+  const [studentGroup, setStudentGroup] = useState("AB12");
+  const [selectedPayment, setSelectedPayment] = useState<RecordMap | null>(null);
 
   const showToast = (msg: string, type: 'success'|'info'|'error' = 'success') => {
     setToastMessage({ msg, type });
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     showToast("جاري تسجيل الخروج...", "info");
-    setTimeout(() => {
-      router.push("/");
-    }, 1500);
+    try {
+      await logout();
+    } finally {
+      setTimeout(() => {
+        router.push("/");
+      }, 600);
+    }
   };
 
-  const announcements: Announcement[] = [
-    {
-      id: 1,
-      type: 'admin',
-      title: 'إغلاق استثنائي يوم الجمعة',
-      preview: 'سيتم إغلاق المؤسسة يوم الجمعة بعد الظهر...',
-      fullText: 'أعزاءنا الطلاب، يرجى العلم أنه سيتم إغلاق المؤسسة يوم الجمعة بعد الظهر لأسباب تتعلق بالصيانة التقنية. سيتم تأجيل الفصول المجدولة. نعتذر عن أي إزعاج قد ينجم عن ذلك.',
-      time: 'اليوم الساعة 09:30 ص',
-      color: 'blue'
-    },
-    {
-      id: 2,
-      type: 'teacher',
-      title: 'توفير موارد إضافية',
-      preview: 'تم إضافة تدريبات إضافية في قسم ملفاتي...',
-      fullText: 'لقد قمت بإضافة تدريبات إضافية في قسم ملفاتي وملفات الدروس. يرجى مراجعتها والتدرب عليها قبل المحاضرة القادمة. هناك 5 تدريبات جديدة مع حلول شاملة.',
-      time: 'أمس الساعة 18:00 م',
-      color: 'purple',
-      teacher: 'أ. أحمد (رياضيات)'
-    }
-  ];
+  const toText = (value: unknown, fallback = "") =>
+    typeof value === "string" && value.trim().length > 0 ? value : fallback;
+  const toNumber = (value: unknown, fallback = 0) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const toArabicAttendance = (value: unknown): "حاضر" | "غائب" | "متأخر" => {
+    const normalized = toText(value, "").toLowerCase();
+    if (normalized.includes("late") || normalized.includes("retard") || normalized.includes("متأخر")) return "متأخر";
+    if (normalized.includes("abs") || normalized.includes("غائب") || normalized.includes("absent")) return "غائب";
+    return "حاضر";
+  };
+
+  useEffect(() => {
+    const loadStudentData = async () => {
+      if (!user?.userId) return;
+      try {
+        const [scheduleRows, attendanceRows, paymentRows, announcementRows] = await Promise.all([
+          scheduleService.getMySchedule(),
+          attendanceService.getByStudent(user.userId),
+          paymentsService.getByStudent(user.userId),
+          communicationService.getAnnouncements(),
+        ]);
+
+        const mappedSchedule: ScheduleSession[] = scheduleRows.map((row, index) => ({
+          id: toText(row.id, `S-${index}`),
+          day: toText(row.day, toText(row.jour, "الإثنين")),
+          time: toText(row.time, toText(row.startTime, "--:--")),
+          subject: toText(row.subject, toText(row.subjectName, "مادة")),
+          teacher: toText(row.teacher, toText(row.teacherName, "أستاذ")),
+          room: toText(row.room, toText(row.roomName, "قاعة")),
+          group: toText(row.group, toText(row.groupName, studentGroup)),
+        }));
+
+        const mappedAttendance: StudentAttendanceRecord[] = attendanceRows.map((row, index) => ({
+          id: toText(row.id, `AT-${index}`),
+          date: toText(row.date, toText(row.sessionDate, "")),
+          subject: toText(row.subject, toText(row.subjectName, "مادة")),
+          status: toArabicAttendance(row.status),
+          justification: toText(row.justification, toText(row.notes, "-")),
+        }));
+
+        const mappedAnnouncements: Announcement[] = announcementRows.map((row, index) => {
+          const scope = toText(row.scope, "").toLowerCase();
+          const type: "admin" | "teacher" = scope.includes("teacher") ? "teacher" : "admin";
+          return {
+            id: toText(row.id, `ANN-${index}`),
+            type,
+            title: toText(row.title, "إعلان"),
+            preview: toText(row.content, ""),
+            fullText: toText(row.content, ""),
+            time: toText(row.createdAt, ""),
+            color: type === "teacher" ? "purple" : "blue",
+            teacher: toText(row.authorName, ""),
+          };
+        });
+
+        setStudentScheduleRows(mappedSchedule);
+        setStudentAttendanceRows(mappedAttendance);
+        setStudentPaymentRows(paymentRows);
+        setStudentAnnouncements(mappedAnnouncements);
+
+        const detectedGroup = mappedSchedule.find((row) => row.group)?.group;
+        if (detectedGroup) setStudentGroup(detectedGroup);
+      } catch {
+        showToast("تعذر تحميل بيانات الطالب", "error");
+      }
+    };
+
+    void loadStudentData();
+  }, [user?.userId]);
+
+  const announcements = studentAnnouncements;
 
   // Header Handlers
   const [showNotifs, setShowNotifs] = useState(false);
@@ -177,7 +248,6 @@ export default function StudentDashboard() {
     { id: 2, title: "تذكير: واجب الفيزياء غداً", time: "منذ ساعتين", read: false },
   ]);
 
-  const studentGroup = "AB12";
   const [sharedSchedules, setSharedSchedules] = useState<SharedScheduleEntry[]>(() => readSharedSchedules());
 
   useEffect(() => {
@@ -201,9 +271,7 @@ export default function StudentDashboard() {
 
   const dayOrder = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
   const studentScheduleSessions: ScheduleSession[] = [
-    { id: "S-1", day: "الإثنين", time: "08:30 - 10:00 ص", subject: "الرياضيات", teacher: "أ. أحمد", room: "قاعة 203", group: studentGroup },
-    { id: "S-2", day: "الإثنين", time: "10:15 - 12:00 م", subject: "الفيزياء", teacher: "أ. سارة", room: "قاعة 107", group: studentGroup },
-    { id: "S-3", day: "الثلاثاء", time: "09:00 - 11:00 ص", subject: "العلوم", teacher: "أ. محمود", room: "مختبر 1", group: studentGroup },
+    ...studentScheduleRows,
     ...adminGroupSchedules.map((row, index) => ({
       id: `SA-${index}`,
       day: row.day,
@@ -220,16 +288,16 @@ export default function StudentDashboard() {
     return acc;
   }, {});
 
-  const attendanceRecords: StudentAttendanceRecord[] = [
-    { id: "ST-AT-1", date: "2026-03-12", subject: "الرياضيات", status: "حاضر", justification: "-" },
-    { id: "ST-AT-2", date: "2026-03-12", subject: "الفيزياء", status: "غائب", justification: "تم تقديم عذر طبي" },
-    { id: "ST-AT-3", date: "2026-03-11", subject: "العلوم", status: "متأخر", justification: "10 دقائق" },
-    { id: "ST-AT-4", date: "2026-03-11", subject: "الفرنسية", status: "حاضر", justification: "-" },
-  ];
-  const filteredAttendance = attendanceRecords.filter((row) => row.date === selectedAttendanceDate);
+  const filteredAttendance = studentAttendanceRows.filter((row) => row.date === selectedAttendanceDate);
   const presentCount = filteredAttendance.filter((row) => row.status === "حاضر").length;
   const absentCount = filteredAttendance.filter((row) => row.status === "غائب").length;
   const lateCount = filteredAttendance.filter((row) => row.status === "متأخر").length;
+  const paidCount = studentPaymentRows.filter((row) => {
+    const status = toText(row.status, "").toLowerCase();
+    return status.includes("paid") || status.includes("مدفوع");
+  }).length;
+  const unpaidCount = studentPaymentRows.length - paidCount;
+  const paymentHealthy = unpaidCount <= 0;
 
   const content = (() => {
     switch (currentPage) {
@@ -240,7 +308,7 @@ export default function StudentDashboard() {
               <StatCard title="المحاضرات اليوم" value="4" subtitle="المحاضرة القادمة 10:15" onClick={() => setCurrentPage("schedule")} />
               <StatCard title="إعلانات" value="2" subtitle="إعلانات مدرسية جديدة" onClick={() => setCurrentPage("announcements")} />
               <StatCard title="الإشعارات" value={unreadCount.toString()} subtitle="إشعارات غير مقروءة" onClick={() => setShowNotifs(true)} />
-              <StatCard title="حالة الدفع" value="نشط" subtitle="تم دفع شهر مارس" highlight={true} onClick={() => setCurrentPage("payments")} />
+              <StatCard title="حالة الدفع" value={paymentHealthy ? "نشط" : "متأخر"} subtitle={paymentHealthy ? "لا توجد مستحقات" : `${unpaidCount} مستحقات غير مدفوعة`} highlight={paymentHealthy} onClick={() => setCurrentPage("payments")} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -512,43 +580,43 @@ export default function StudentDashboard() {
       case "payments":
         return (
           <SectionCard title="سجل المدفوعات">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div onClick={() => setShowPaymentModal(true)} className="border border-gray-200 rounded-2xl p-5 hover:border-green-300 hover:shadow-md transition-all shadow-sm bg-white cursor-pointer">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="font-black text-[#2d2d5e] text-lg">شهر مارس</h4>
-                    <p className="text-sm text-gray-500 font-bold mt-1">المصروفات الدراسية</p>
-                  </div>
-                  <span className="bg-green-100 text-green-700 font-black px-3 py-1.5 rounded-lg text-xs border border-green-200">
-                    مدفوع
-                  </span>
-                </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <span className="font-black text-lg text-[#2d2d5e]">1500 درهم</span>
-                  <button onClick={(e) => {e.stopPropagation(); showToast("جاري تحميل الإيصال...", "success");}} className="text-[#e01c8a] text-sm font-bold hover:underline flex items-center gap-1">
-                    تحميل الإيصال
-                  </button>
-                </div>
+            {studentPaymentRows.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm font-bold text-gray-400">
+                لا توجد سجلات مدفوعات متاحة حالياً
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {studentPaymentRows.map((row, index) => {
+                  const statusText = toText(row.status, "غير محدد");
+                  const isPaid = statusText.toLowerCase().includes("paid") || statusText.includes("مدفوع");
+                  return (
+                    <div key={`student-payment-${index}`} onClick={() => { setSelectedPayment(row); setShowPaymentModal(true); }} className={`rounded-2xl p-5 transition-all shadow-sm hover:shadow-md cursor-pointer ${isPaid ? "border border-gray-200 bg-white hover:border-green-300" : "border border-[#e01c8a]/40 bg-rose-50/30 hover:border-[#e01c8a]"}`}>
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-black text-[#2d2d5e] text-lg">{toText(row.period, toText(row.month, "اشتراك"))}</h4>
+                          <p className="text-sm text-gray-500 font-bold mt-1">{toText(row.label, "المصروفات الدراسية")}</p>
+                        </div>
+                        <span className={`font-black px-3 py-1.5 rounded-lg text-xs border ${isPaid ? "bg-green-100 text-green-700 border-green-200" : "bg-rose-100 text-[#e01c8a] border-rose-200"}`}>
+                          {isPaid ? "مدفوع" : "غير مدفوع"}
+                        </span>
+                      </div>
+                      <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <span className="font-black text-lg text-[#2d2d5e]">{toNumber(row.amount, 0)} درهم</span>
+                        {isPaid ? (
+                          <button onClick={(e) => {e.stopPropagation(); showToast("جاري تحميل الإيصال...", "success");}} className="text-[#e01c8a] text-sm font-bold hover:underline flex items-center gap-1">
+                            تحميل الإيصال
+                          </button>
+                        ) : (
+                          <button onClick={(e) => {e.stopPropagation(); setSelectedPayment(row); setShowPaymentModal(true); showToast("فتح نافذة الدفع الآمن...", "info");}} className="bg-[#e01c8a] hover:bg-rose-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors hover:shadow-md">
+                            الدفع الآن
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-
-              <div onClick={() => setShowPaymentModal(true)} className="border border-[#e01c8a]/40 bg-rose-50/30 rounded-2xl p-5 hover:border-[#e01c8a] transition-all shadow-sm hover:shadow-md cursor-pointer">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="font-black text-[#2d2d5e] text-lg">شهر أبريل</h4>
-                    <p className="text-sm text-gray-500 font-bold mt-1">المصروفات الدراسية</p>
-                  </div>
-                  <span className="bg-rose-100 text-[#e01c8a] font-black px-3 py-1.5 rounded-lg text-xs border border-rose-200">
-                    غير مدفوع
-                  </span>
-                </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <span className="font-black text-lg text-[#2d2d5e]">1500 درهم</span>
-                  <button onClick={(e) => {e.stopPropagation(); setShowPaymentModal(true); showToast("فتح نافذة الدفع الآمن...", "info");}} className="bg-[#e01c8a] hover:bg-rose-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors hover:shadow-md">
-                    الدفع الآن
-                  </button>
-                </div>
-              </div>
-            </div>
+            )}
           </SectionCard>
         );
 
@@ -910,7 +978,7 @@ export default function StudentDashboard() {
                 <div className="p-6 space-y-4">
                   <div className="bg-linear-to-br from-rose-50 to-orange-50 border border-rose-100 rounded-2xl p-4">
                     <p className="text-sm text-gray-600 font-bold mb-2">المبلغ المستحق:</p>
-                    <p className="text-3xl font-black text-[#e01c8a]">1500 درهم</p>
+                    <p className="text-3xl font-black text-[#e01c8a]">{toNumber(selectedPayment?.amount, 1500)} درهم</p>
                   </div>
 
                   <div className="space-y-3">
@@ -1010,5 +1078,13 @@ export default function StudentDashboard() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function StudentDashboard() {
+  return (
+    <AuthGuard allowedRoles={['ETUDIANT']}>
+      <StudentDashboardContent />
+    </AuthGuard>
   );
 }

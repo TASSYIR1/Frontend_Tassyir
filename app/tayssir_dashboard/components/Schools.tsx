@@ -1,18 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { schoolService } from "@/lib/api/school.service";
+import type { SchoolResponse } from "@/lib/api/types";
 
-const mockSchools = [
-  { id: 1, name: "مدرسة المستقبل", type: "Normale", date: "2024-01-10", status: "active", contact: "خالد سعيد", phone: "0555123456" },
-  { id: 2, name: "معهد القمة", type: "Cours Sup", date: "2024-02-15", status: "active", contact: "سارة عبد الله", phone: "0666987654" },
-  { id: 3, name: "مدارس الشروق", type: "Normale", date: "2023-11-05", status: "suspended", contact: "عمر جمال", phone: "0777555333" },
-];
+type SchoolRow = {
+  id: string;
+  name: string;
+  type: string;
+  date: string;
+  status: "active" | "suspended";
+  contact: string;
+  phone: string;
+};
+
+function mapSchoolToRow(school: SchoolResponse): SchoolRow {
+  return {
+    id: school.id,
+    name: school.name,
+    type: school.type === "COURS_SUPPLEMENTAIRES" ? "Cours Sup" : "Normale",
+    date: school.createdAt ? String(school.createdAt).split("T")[0] : "—",
+    status: school.active ? "active" : "suspended",
+    contact: "—",
+    phone: "—",
+  };
+}
 
 export default function Schools() {
-  const [schools, setSchools] = useState(mockSchools);
+  const [schools, setSchools] = useState<SchoolRow[]>([]);
+  const [search, setSearch] = useState("");
 
-  const toggleStatus = (id: number) => {
-    setSchools(schools.map(s => {
+  useEffect(() => {
+    let mounted = true;
+    async function loadSchools() {
+      try {
+        const data = await schoolService.listSchools();
+        if (mounted) setSchools(data.map(mapSchoolToRow));
+      } catch (error) {
+        console.error("Failed to load schools:", error);
+      }
+    }
+    loadSchools();
+    return () => { mounted = false; };
+  }, []);
+
+  const filteredSchools = useMemo(() => {
+    if (!search.trim()) return schools;
+    const query = search.trim();
+    return schools.filter(s =>
+      s.name.includes(query) || s.type.includes(query) || s.date.includes(query)
+    );
+  }, [schools, search]);
+
+  const toggleStatus = (id: string) => {
+    setSchools(prev => prev.map(s => {
       if (s.id === id) {
         return { ...s, status: s.status === "active" ? "suspended" : "active" };
       }
@@ -29,6 +70,8 @@ export default function Schools() {
           <input
             type="text"
             placeholder="البحث عن مدرسة..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#e01c8a]/20 focus:border-[#e01c8a]"
           />
         </div>
@@ -48,8 +91,8 @@ export default function Schools() {
               </tr>
             </thead>
             <tbody>
-              {schools.map((school, i) => (
-                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              {filteredSchools.map((school, i) => (
+                <tr key={school.id || i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                   <td className="py-4 px-6 font-bold text-[#2d2d5e]">{school.name}</td>
                   <td className="py-4 px-6 font-semibold text-gray-600">{school.type === "Normale" ? "مدرسة عادية" : "مركز دعم"}</td>
                   <td className="py-4 px-6 text-gray-500">{school.date}</td>

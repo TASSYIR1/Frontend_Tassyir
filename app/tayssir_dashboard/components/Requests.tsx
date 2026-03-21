@@ -1,43 +1,115 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { schoolService } from "@/lib/api/school.service";
+import type { SchoolResponse } from "@/lib/api/types";
 
-const mockRequests = [
-  { id: 1, name: "مدرسة المستقبل", type: "Normale", rep: "خالد سعيد", contact: "0555123456", date: "2024-03-20", status: "pending", desc: "مدرسة تهتم بالتعليم الابتدائي", students: 300, level: "primaire" },
-  { id: 2, name: "معهد القمة", type: "Cours Sup", rep: "سارة عبد الله", contact: "0666987654", date: "2024-03-19", status: "accepted", desc: "دروس دعم بجميع المستويات", students: 150, level: "secondaire" },
-  { id: 3, name: "مدرسة الأمل", type: "Normale", rep: "محمد كمال", contact: "0777123987", date: "2024-03-18", status: "rejected", desc: "مدرسة دولية", students: 500, level: "moyen" },
+type RequestStatus = "pending" | "accepted" | "rejected";
+
+const filterOptions: { id: "all" | RequestStatus; label: string }[] = [
+  { id: "all", label: "الكل" },
+  { id: "pending", label: "في الانتظار" },
+  { id: "accepted", label: "مقبولة" },
+  { id: "rejected", label: "مرفوضة" }
 ];
 
 type RequestType = {
-  id: number;
+  id: string;
   name: string;
   type: string;
   rep: string;
   contact: string;
+  email: string;
   date: string;
-  status: string;
+  status: RequestStatus;
   desc: string;
-  students: number;
   level: string;
 };
 
-export default function Requests() {
-  const [filter, setFilter] = useState("all");
-  const [selectedReq, setSelectedReq] = useState<RequestType | null>(null);
+function mapSchoolToRequest(school: SchoolResponse): RequestType {
+  return {
+    id: school.id,
+    name: school.name,
+    type: school.type === "COURS_SUPPLEMENTAIRES" ? "Cours Sup" : "Normale",
+    rep: "—",
+    contact: school.contactPhone || "—",
+    email: school.contactEmail || "—",
+    date: school.createdAt ? String(school.createdAt).split("T")[0] : "—",
+    status: school.requestStatus === "ACCEPTED"
+      ? "accepted"
+      : school.requestStatus === "REJECTED"
+        ? "rejected"
+        : "pending",
+    desc: school.aboutDescription || "بدون وصف",
+    level: school.schoolLevel || "—",
+  };
+}
 
-  const filtered = filter === "all" ? mockRequests : mockRequests.filter(r => r.status === filter);
+export default function Requests() {
+  const [requests, setRequests] = useState<RequestType[]>([]);
+  const [filter, setFilter] = useState<"all" | RequestStatus>("all");
+  const [selectedReq, setSelectedReq] = useState<RequestType | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadRequests() {
+      try {
+        const schools = await schoolService.listSchools();
+        if (mounted) {
+          setRequests(schools.map(mapSchoolToRequest));
+        }
+      } catch (error) {
+        console.error("Failed to load registration requests:", error);
+      }
+    }
+    loadRequests();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filtered = filter === "all" ? requests : requests.filter(r => r.status === filter);
+
+  const updateRequestStatus = (requestId: string, status: RequestStatus) => {
+    setRequests(prev => prev.map(req => req.id === requestId ? { ...req, status } : req));
+    setSelectedReq(prev => prev && prev.id === requestId ? { ...prev, status } : prev);
+  };
+
+  const handleAccept = async () => {
+    if (!selectedReq || actionLoading) return;
+    try {
+      setActionLoading(true);
+      await schoolService.approveSchoolRequest(selectedReq.id);
+      updateRequestStatus(selectedReq.id, "accepted");
+      setSelectedReq(null);
+    } catch (error) {
+      console.error("Failed to approve request:", error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedReq || actionLoading) return;
+    try {
+      setActionLoading(true);
+      await schoolService.rejectSchoolRequest(selectedReq.id);
+      updateRequestStatus(selectedReq.id, "rejected");
+      setSelectedReq(null);
+    } catch (error) {
+      console.error("Failed to reject request:", error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   return (
     <div className="p-6 md:p-8 font-cairo" dir="rtl">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <h2 className="text-2xl font-black text-[#2d2d5e]">طلبات التسجيل</h2>
         <div className="flex items-center gap-2 bg-white p-1 rounded-xl shadow-sm border border-gray-100">
-          {[
-            { id: "all", label: "الكل" },
-            { id: "pending", label: "في الانتظار" },
-            { id: "accepted", label: "مقبولة" },
-            { id: "rejected", label: "مرفوضة" }
-          ].map(f => (
+          {filterOptions.map(f => (
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
@@ -64,8 +136,8 @@ export default function Requests() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((req, i) => (
-                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              {filtered.map((req) => (
+                <tr key={req.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                   <td className="py-4 px-6 font-bold text-[#2d2d5e]">{req.name}</td>
                   <td className="py-4 px-6 font-semibold text-gray-600">{req.type === "Normale" ? "مدرسة عادية" : "مركز دروس دعم"}</td>
                   <td className="py-4 px-6 text-gray-600">{req.rep}</td>
@@ -110,7 +182,6 @@ export default function Requests() {
                     <p><span className="font-semibold text-gray-500 w-24 inline-block">الاسم:</span> {selectedReq.name}</p>
                     <p><span className="font-semibold text-gray-500 w-24 inline-block">النوع:</span> {selectedReq.type}</p>
                     <p><span className="font-semibold text-gray-500 w-24 inline-block">المستوى:</span> {selectedReq.level}</p>
-                    <p><span className="font-semibold text-gray-500 w-24 inline-block">العدد التقديري:</span> {selectedReq.students} طالب</p>
                   </div>
                 </div>
                 <div>
@@ -118,7 +189,7 @@ export default function Requests() {
                   <div className="space-y-2 text-sm text-[#2d2d5e]">
                     <p><span className="font-semibold text-gray-500 w-24 inline-block">الاسم الكامل:</span> {selectedReq.rep}</p>
                     <p><span className="font-semibold text-gray-500 w-24 inline-block">رقم الهاتف:</span> <span dir="ltr">{selectedReq.contact}</span></p>
-                    <p><span className="font-semibold text-gray-500 w-24 inline-block">الإيميل:</span> contact@school.com</p>
+                    <p><span className="font-semibold text-gray-500 w-24 inline-block">الإيميل:</span> {selectedReq.email}</p>
                   </div>
                 </div>
               </div>
@@ -134,11 +205,11 @@ export default function Requests() {
             <div className="p-6 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3 rounded-b-3xl">
               {selectedReq.status === "pending" ? (
                 <>
-                  <button onClick={() => setSelectedReq(null)} className="px-6 py-2 rounded-xl border border-rose-200 text-rose-600 font-bold hover:bg-rose-50 transition-colors">
-                    رفض الطلب
+                  <button disabled={actionLoading} onClick={handleReject} className="px-6 py-2 rounded-xl border border-rose-200 text-rose-600 font-bold hover:bg-rose-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                    {actionLoading ? "جاري المعالجة..." : "رفض الطلب"}
                   </button>
-                  <button onClick={() => setSelectedReq(null)} className="px-6 py-2 rounded-xl bg-linear-to-l from-emerald-500 to-emerald-400 text-white font-bold hover:opacity-90 shadow-md shadow-emerald-500/20 transition-all">
-                    قبول وإنشاء الحساب
+                  <button disabled={actionLoading} onClick={handleAccept} className="px-6 py-2 rounded-xl bg-linear-to-l from-emerald-500 to-emerald-400 text-white font-bold hover:opacity-90 shadow-md shadow-emerald-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                    {actionLoading ? "جاري المعالجة..." : "قبول وإنشاء الحساب"}
                   </button>
                 </>
               ) : (
